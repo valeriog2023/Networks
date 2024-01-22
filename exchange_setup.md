@@ -84,3 +84,7 @@ Note that:
 
 *  show l1 matrix / show l1 matrix all
    it will show how ports are connected in a schematic form
+
+
+# A diagram
+<img src="exchange_setup_diagram.png" alt="PTP Message exchange" style="height: 600px; width:1000px;"/>
