@@ -63,3 +63,41 @@ of a network and timestamped.
 Assuming the timestamp is from a reliable time source you can check latency by analysing the
 caputres and comparing the timestamps (this will require some analysis tool or scripting,
 like wireshark, pandas, etc..)
+
+# Short Notes on PTP
+
+**Note:** while PTP is measured in nanoseconds, the actual accuracy is around a microsecond (for sub nanoseconds convergence you might need extension to ptp like white rabbit)
+Also note, that other protocols are used in the time synch area like **PPS**
+which is used not for time keeping but to give a precise measure of when a period starts 
+
+**Two** separate delay values must be determined: 
+*  the delay from the master to slave
+*  the delay from the slave to master.
+
+To calculate the delay from the master to slave:
+*  T1 is the initial timestamp, and is the exact time the **sync** message is sent by the master. Since T1 is an accurate recording of when the sync message was transmitted via the Ethernet port, it is sent in the **follow-up** message.
+
+*  T2 is the second timestamp, and is the exact time the slave receives the sync message.
+
+Once both T1 and T2 are available at the slave, the delay value between the master and the slave can be determined through the calculation **T2 – T1**.
+
+To calculate the delay from the slave to the master:
+*  T3 is the third timestamp, and is the exact time the **delay request** message is sent from the slave. 
+*  T4 is the fourth and final timestamp, and is the exact time the master receives the **delay request** message. T4 is notified to the client with a **delay response** message
+
+Once both T3 and T4 are available at the slave, the delay value between the slave and the master can be determined through the calculation **T4 – T3**.
+
+Once both the master to slave, and slave to master differences are available at the slave, the one-way delay can be determined.   
+```
+One-way delay = (master to slave difference + slave to master difference) / 2
+
+This can be simplified as:
+Offset = ((T2 - T1) - (T4 - T3)) / 2
+```
+
+
+
+By utilising this offset, the slave clock can adjust its time to ensure it matches the master clock.
+
+<img src="PTP Message exchange.png" alt="PTP Message exchange" style="height: 500px; width:600px;"/>
+
