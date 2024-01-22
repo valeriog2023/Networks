@@ -1,24 +1,27 @@
-"BGP NOTES
-Note: AD is only for routing tables, it does not affect BGP selection process
+# BGP NOTES
+Notes: 
+* AD is only for routing tables, it does not affect BGP selection process
  IBGP AD 200
  EBGP 20
-in bgp you can assigna prefix a 200 AD if you use a network <prefix> <mask> backdoor 
-command. Usually done so that IGP prefixes are preferred over EBGP (but only specific ones)
-BGP ASN
- Private AS numbers in the range 64512–65535 
- extended notation (4 bytes) is enabled with: bgp asnotation dot 
-BGP SCAN PROCESS AND KEEP ALIVE:
+* You can assigna prefix a 200 AD if you use a ```network <prefix> <mask> backdoor``` command. 
+  Usually done so that IGP prefixes are preferred over EBGP (but only specific ones)
+* BGP ASN:
+  * Private AS numbers in the range 64512–65535 
+  * Extended notation (4 bytes) is enabled with: bgp asnotation dot 
+  * Confederations have the real ASN inside the router section (see later)
+* BGP SCAN PROCESS:  
+  Set with: ```bgp scan-time <5-60>```
   - Runs through all prefixes in BGP table and checks the validity and reachability of the BGP NEXT_HOP attribute.
   - Performs conditional advertisement and route injection.
   - Imports new routes into the BGP table from RIB (via network and redistribute commands).
-  - Performs route dampening.
-  Set with: bgp scan-time <5-60>
-  Keep alive times are set with: timers bgp <keepalive> <holdtime>, default values are 60 and 180 seconds
-BGP NEXT HOP TRIGGER:
-  bgp nexthop trigger delay <seconds>   
-it reacts to changes to IGP next-hop values, e.g. metric changes or next-hop becoming unreachable
+  - Performs route dampening.   
+* BGP KEEP ALIVE:  
+  Keep alive times are set with: timers ```bgp <keepalive> <holdtime>```  
+  Default values are 60 and 180 seconds
+* BGP NEXT HOP TRIGGER: ```bgp nexthop trigger delay <seconds>```   
+  it reacts to changes to IGP next-hop values, e.g. metric changes or next-hop becoming unreachable
 
-NEIGHBORS
+## NEIGHBORS
 - TCP port 179; src IP is the interface
    - update-source can be used to change the src interface neighbor <X> update-source <intf>
 - Staes are 
@@ -60,11 +63,11 @@ NEIGHBORS
     Note that this feature is only efficient when the peering session is established across the non-shared link; 
     when the IGP route to the peer disappear, the neighbor is considered down immediately
     Again probably we use BFD now..                              
-- ALLOW-AS IN: use: neighbor <IP> allowas-in [count] 
+- ALLOW-AS IN: use: ```neighbor <IP> allowas-in [count]``` 
   if you want to accept routes that have its local AS in the path 
   MPLS PE use (usually) as-override that replaces the incoming AS with the PE AS so that when the update is received it is not dropped                                  
 
-ROUTES EXCHANGES:
+## ROUTES EXCHANGES
 - IGP synchronization: now nostlydisabled; it used to require that for every IBGP route a matching IGP route should be present)
                        the idea was to prevent black holes
     Note: BGP can have a route in rib failure if the same prefix is present in an IGP with better AD
@@ -92,7 +95,7 @@ ROUTES EXCHANGES:
 - EBGP leanred routes keep the same value for the next-hop when sent to IBGP neighbors (by default)
 - bgp redistribute internal is required to enable redistribution from BGP to IGP
 
-DAMPENING:
+## DAMPENING
 You can suppress a prefix based on how often it flaps and un-suppress it after an exponentially decaying timer expires. 
 Every time a prefix flaps, it is assigned an additive penalty value, 1000 by default; (halved:500 if it is only an attribute change) 
 It also still tracked if it becomes uavailable (in case it comes back). 
@@ -110,7 +113,7 @@ Notes:
 Side Note that a way to reduce network instability is by using aggregation    
 
 
-ROUTES
+## ROUTES
 - use network statement (mask can be omitted if classful)
   - the route needs to be in the routing table (possibly as null0)
   - auto-summary (bgp global will install the route as classful )
@@ -143,13 +146,15 @@ ROUTES
    - EBGP routes over IBGP routes
    - lowest IGP metric to next hop
    - lowest BGP router id
-DEFAULT ROUTE:
+
+### DEFAULT ROUTE
   You may inject a default route into BGP by using the network 0.0.0.0 mask 0.0.0.0 command, if there is a default route in the RIB. 
   However, to selectively generate a default route, use the command: 
     neighbor <IP> default-originate [route-map <CONDITION>] . 
   Without the route-map parameter, this command will generate a default route and send it to the configured peer. 
   It is not required to have a matching default route in the BGP table or the RIB   
-FILTERING:
+
+## FILTERING
   Filtering order is 
    INBOUND:  1. route-map, 2. filter-list,  3. prefix-list OR distribute-list
    OUTBOUND: 1. prefix-list OR distribute-list,  2. filter-list, 3. route-map
@@ -182,7 +187,7 @@ FILTERING:
     of the prefixes received (double memory utilization though..) - different show commands, e.g. show ip bgp neigh <IP> routes vs received-routes  
          
 
-EQUAL/UNEQUAL COST PATH LOAD BALANCING:
+# EQUAL/UNEQUAL COST PATH LOAD BALANCING
   requriements (equal cost path lo):
   - same attributes up to MED
   - same type (either iBGO or eBGP)
@@ -195,7 +200,8 @@ EQUAL/UNEQUAL COST PATH LOAD BALANCING:
      - per neighbor: neigbor <IP> dmzlink-bw to select which neighbor load balance with 
   - the ebgp prefixes will carry a new attribute (ext community) with the bandwith of the link to the neighbors
     so send-community extend is required   
-AGGREGATION:
+
+## AGGREGATION
   - to aggreagte IGP routes you can create a static route to null 0 and use the newtok command
   - Autosummary is always an option (not a great one) 
   - aggreagte-address <prefix> <mask> , requires one subnet in the range to be in the BGP table (not neessarily the routing table)
@@ -223,7 +229,7 @@ AGGREGATION:
     or it will have none), AS_PATH attribute is reset to an empty list. The second route-map defines the conditions to meet 
     for the new prefixes to be injected: bgp inject-map <MAP1> exist-map <MAP2>
 
-COMMUNITIES:
+## COMMUNITIES
 BGP communities are optional transitive attributes used mainly to associate an administrative tag to a route. 
 32 bit, either completely numeric or in <ASN>:<number> format using: ip bgp-community new-format
  - neighbor can exchange communitiies if configured with: neighbor <IP> send-community extended
