@@ -37,10 +37,37 @@ no ip mfib cef input
 no ip mfib cef output
 ```
 
+
+Verify commands:
+```
+show ip pim neighbor
+show ip pim interface
+show ip mroute   
+show ip pim rp mapping
+
+Note that in show ip mroute:
+  - the (*,G) will have all the interfaces in the OIL, this entry will have the D flag
+  - the (S,G) will have the T bit (traffic in shortest Path)
+  - the RP value is 0.0.0.0 (RPF not used)
+  - the RPF value is all 0 if the source is directly connected, otherwise it's the upstream neighbor
+
+show ip rpf <source>
+will get the information about the RPF interface for a specific source 
+
+show ip igmp interface <intf>
+will show 
+- the timers on the interface 
+- PIM DR and IMP querier
+- the groups joined
+
+show ip igmp groups
+- to see the groups joined
+```
+
+Note:   
 You can tunnel multicast to traverse networks that do not support it, however remember:
 *  pim needs to be enabled in the tunnel interface
 *  the tunnel needs to be in the RPF path
-
 
 
 # PIM DENSE MODE
@@ -55,29 +82,14 @@ You can tunnel multicast to traverse networks that do not support it, however re
    interface <X>
      ip pim dense-mode
    ```
-*  Verify commands
-   ```
-   show ip pim neighbor
-   show ip pim interface
-   show ip mroute   
-   show ip pim rp mapping
 
-   Note that in show ip mroute, 
-     - the (*,G) will have all the interfaces in the OIL, this entry will have the D flag
-     - the (S,G) will have the T bit (traffic in shortest Path)
-     - the RP value is 0.0.0.0 (RPF not used)
-     - the RPF value is all 0 if the source is directly connected, otherwise it's the upstream neighbor
-
-   show ip rpf <source>
-   will get the information about the RPF interface for a specific source 
-   ```
 
 
 
 # PIM SPARSE MODE
 PIM SM builds explicit multicast distribution trees from the receivers to the sources. 
-It uses Rendezvous Point (RP)to faciliate discovery of endpoints (sources/destinations):
-*  An RP is a known to both sources and receivers. 
+It uses Rendezvous Point (RP) to faciliate discovery of endpoints (sources/destinations):
+*  An RP is a router known to both sources and receivers. 
    *  A Receiver (for a group: G) router first builds a tree to the RP; this is called **SHARED TREE** or (*,G)
       This is done by sending upstream **PIM JOIN** messages toward the RP
    *  When a source appears in the network, the **closest multicast router** will contact the RP 
@@ -89,9 +101,9 @@ It uses Rendezvous Point (RP)to faciliate discovery of endpoints (sources/destin
    *  The RP builds a new SPT toward the source using **PIM Join** messages and starts forwarding traffic down 
       the (*,G) tree. 
    *  When the SPT to the source is created (by the RP) the RP sends a **Register Stop** message 
-      TRaffic does not need to be incapsulated anymore, it can just follow the SPT to the RP
-   *  **SPT switchover**: when the receivers see traffic going down the (*,G) tree from a source, they initiate 
-       a **PIM Join** toward the source, building another SPT designated as the (S,G) (falt will be set to T)
+      Taffic does not need to be incapsulated anymore, it can just follow the SPT to the RP
+   *  **SPT switchover**: when the receivers see traffic coming down the (\*,G) tree from a specific source: **S**, they initiate 
+       a **PIM Join** toward the source, building another SPT designated as the **(S,G)** (flag will be set to T)
       Also a **Prune** message is sent to the RP as we don't need the traffic from (*,G) anymore 
       Nete: you can set a threshold for the switchover to happen (and possibly disable it completely):
       ```ip pim spt-threshold [<Rate in Kbps>|infinity]```
@@ -126,11 +138,11 @@ The winner is decided based on:
 
 ## PIM SPARSE MODE - ASSERT
 
-If multiple multicast routers share a single segment, only will one will send traffic to avoid duplication, i.e.
+If multiple multicast routers share a single segment, only one will send traffic to avoid duplication, i.e.
 the downstream router would see, accept and forward packets from both.  
 *  A router detects that someone is sending traffic for the same (S,G), that is also locally active (S,G)  
    so it originates a PIM Assert message.  
-   The message contains the source IP, the group, and the path cost to the source (AD, Metric).  
+   The message contains the source IP: S, the group: G, and the path cost to the source (AD, Metric).  
 *  The Messge is evaluated: best (lowest) AD value wins the assertion 
    *  metric and router ip on the segment are used as possible tie breaker if required 
 *  The loser  will remove the (S,G) state on its interface and stop flooding traffic.
@@ -153,7 +165,7 @@ This is a security feature (for all routers):
 ip pim accept-rp [<rp-address> | auto-rp] [<access-list-name>]
 ```
 When configured the router will only accept **join/prune** messages for  (*,G) the specific RP
-This means a client can't creat a SPT through this router if the RP is not the one allowed.
+This means a client can't create a SPT through this router if the RP is not the one allowed.
 The access-list is used, then only **Join/Prune** messages for the groups in the acl are accepted.
 **Notes:** 
 *  (S,G) join/prune are not affected
@@ -207,7 +219,7 @@ Mapping Agents compile a list of **Group to RP mappings** and send **“RP disco
    * Positive Entries are selected based on longest match
    * Note that a single negative entry could blacklist multiple positive (as it is considered first)
 *  Groups: 224.0.1.39, 224.0.1.40 are propagated across in **dense mode** thorugh the network. (there is no RP)
-   This requires: ```pim sparse-dense-mode``` on all interfaces within the multicast domain. You may also
+   This requires: ```ip pim sparse-dense-mode``` on all interfaces within the multicast domain. You may also
    want to use the ```no ip dm-fallback``` global command.
    *  An alternative to **spare-dense** mode for 224.0.1.39, 224.0.1.40, is to use **Auto-RP Listener**  
       It will only allows those 2 groups to work in **dense** mode and it does not use sparse-dense on the interface 
@@ -310,4 +322,143 @@ The **HUB** router will see IGMP requests and handle **PIM state**
    the filter is applied to avoid to create a neighbor with the spoke (the acl should have a deny for the spoke ip)
 
 
-# IGMP FILTERING   
+# IGMP ( FILTERING )   
+IGMP is the protocol used by multicast receivers to communicate their willingness to listen to a particular multicast group.  
+When a host wants to join a multicast group, it sends an **IGMP membership report** message to the multicast address for all routers ```224.0.0.2```.  
+This report contains the multicast group that the host wants to join.  
+The multicast router may control groups allowed with the interface command: ```ip igmp access-group <ACL>```; Note that you could also use: ```ip multicast boundary``` , but
+ip the igmp command is more common.   
+Note that: 
+*  if <ACL> is a standard access-list, the filter will be applied on the group IP. 
+*  If <ACL> is an extended access-list, this will apply alo to IGMPv3 reports that allows to speficy Sources and Groups
+
+The command: ```ip igmp limit <N>``` can instead be applied globally or per interface and it limits the number of multicast group joined by connected receviers (globally or per interface)
+
+The **IGMP membership report** messages sent by clients can be missed so one of the routers in the segment is elected as **IGMP Querier** and periodcally queries all hosts by sending **Membership Queries**; clients should respond with the list of **groups** they want to join
+The **IGMP Querier** is elected as the router with the **lowest IP** in contrast with the **PIM DR** which is elected using the highest IP.
+
+### IGMP Timers
+
+```
+intf <X>
+ ! sends Membership queries every <N> seconds  
+ ip igmp query-interval <N>
+
+ ! if no queries are heard after <M> seconds, try to become the Querier
+ ip igmp querier-timeout <M>  
+
+
+```
+Notes:  
+* IGMP v1 does not have explicit LEAVE messages so multicast is sent until a timer expires with no requests for a group
+ ```ip igmp query-max-response-time [time-in-seconds]```
+* Response to IGMP Membership Queries are broadcasted in the LAN so that when a host replies, the others will know it and not send any other response
+*  if an IGMP v2 LEAVE Message is sent, the querier need to check if there are other cliets and sends out **Last Member Query**; the number of these queries (default: 2) is controlled by ```ip igmp last-member-query-count <N>``` and the time it wait for a response (default: 1sec)is controlled by ```p igmp last-member-query-interval <milliseconds>``` 
+   *  if we know for sure that there is only a client the router can be configured to immediately stop the traffic and leave the group with: ```ip igmp immediate-leave group-
+list <access-list> ```
+
+
+# Multicast Helper Map
+The purpose of this feature is to allow forwarding of broadcast traffic across a multicast capable network.   
+Broadcast UDP packets can be relayed between two subnets using:  ```ip helper-address```, which converts the broadcast destination address to a fixed unicast IP address.  
+In the same way, **Multicast helper**:  ```ip multicast helper-map```, converts the broadcast destination to a fixed multicast address.  
+See a configuration example:
+```
+R1:
+    ip multicast-routing distributed
+    ! This enables the forwarding of UDP broadcast packets to port 5000
+    ip forward-protocol udp 5000
+!
+! intercepts all traffic on UDP porta 53/5000
+    ip access-list extended TRAFFIC
+     permit udp any any eq 5000
+     permit udp any any eq 53
+!
+! this is the interface where the boradcast is received
+    interface GigabitEthernet1.146
+     ip pim dense-mode
+     ip multicast helper-map broadcast 239.1.1.100 TRAFFIC
+
+
+R2
+     ip multicast-routing distributed
+     ip forward-protocol udp 5000
+!
+     ip access-list extended TRAFFIC
+      permit udp any any eq 5000
+      permit udp any any eq 53
+!
+! This is the interface where multicast is received
+     interface GigabitEthernet1.58
+      ip pim dense-mode
+      ip multicast helper-map 239.1.1.100 155.1.108.255 TRAFFIC
+!
+! This is the interface where the broadcast is regenerated
+     interface GigabitEthernet1.108
+      ip pim dense-mode
+      ! This to enable a broadcast (255.255.255.255 would be used)
+      ip directed-broadcast
+      ! this is to change the broadcast address
+      ip broadcast-address 155.1.108.255
+```
+
+# BIDIRECTIONAL PIM (PIM BiDir)
+This is an extension of PIM SM concept that uses only the shared tree for multicast distribution.   
+This mode of operation is useful in situations where most receivers are also senders at the same time (e.g. videoconferencing).  
+**PIM BiDir uses a single distribution tree rooted at the RP**. (Note: if there are multiple RPs, there could be many BiDir trees).  
+To build the bi-directional tree, PIM elects **designated forwarders (DFs)** on every link in the network: i.e. the router with the shortest metric to reach the RP. **DF routers** are the only routers allowed to forward traffic toward the RP (this is considered the **“upstream”** portion of the BiDir tree).  
+Every router in the multicast domain creates a (\*,G) state for each BiDir group, with the OIL built based on PIM Join messages received from its neighbors. This is the **“downstream”** portion of the BiDir tree.  
+Now:
+* packets received on a valid RPF interface is forwarded based on the OIL. 
+* the DF will also forward a copy of these packets toward the RP 
+  * unless that the packet is received on the interface pointing to the RP.
+
+Noes:
+*   PIM BiDir does not utilize the source registration procedure, via PIM Register/Register-Stop messages.   
+   *  Every source connected to a PIM BiDir capable router may start sending at any time
+   *  The packets will flow upward to the RP (not incapsulated). 
+   *  After reaching the RP, packets are either dropped, if there are no receivers for this group 
+      (i.e, the OIL for (*,G) is empty), or forwarded down the BiDir tree.
+      *  This means that ```ip pim accept-register``` will not work with PIM BiDir, because there are    
+         **“register-stop”** messages.
+
+Configuration is simple:
+* Enable BiDir PIM on all multicast routers with:  ```ip pim bidir-enable``` 
+* Designate particular RP/Group combinations as bi-directional.  
+  You can do this in the following ways:
+  *  Use a static RP configuration with the command ```ip pim rp-address <IP> <ACL> bidir``` .
+  *  Use **BSR** or RP information dissemination, you may flag particular group/RP combinations as bi-directional with:  ```ip pim rp-candidate <interface> group-list <ACL> bidir``` 
+  * Use **Auto-RP** for RP information dissemination, you may flag particular group/RP combinations as bi-directional using the syntax ```ip pim send-rp-announce <interface> scope <TTL> group-list <ACL> bidir``` .
+
+
+# SOURCE SPECIFIC MULTICAST (PIM-SSM)
+IGMPv3 is requried for PIM Source Specific Multicast (SSM) because receivers can specify the sources that they want to listen to **explicitly**.  
+The host can ask to join **group G** at **source S**.  
+PIM SSM builds shortest-path trees (SPT) **only toward the sources**; There are no shared trees in PIM SSM and **no RPs are used**.  
+Configuring **PIM SSM** is straight-forward, because it uses regular PIM
+messages. You need to:
+*  Specify the groups that are using SSM with the command ```ip pim ssm range {default|range <Standard-ACL>}``` . 
+    * The **default** keyword means that the range **232.0.0.0/8** is used. 
+    * For the groups in the SSM range, no shared trees are allowed and the (*,G) joins are dropped.
+*  Enable IGMPv3 on the interfaces connected to the receivers capable of using this protocol. Without IGMPv3, there can be no use of PIM SSM.
+
+# MULTICAST BGP EXTENSION
+Multicast BGP extension are usually required if you want to exchange multicast traffic betweene different administrative domains.  
+In particular you need to:
+
+* Enable PIM between the two domains, to allow signaling of shared and shortest-path trees between them.  
+  Each domain usually has its own set of RPs, so you should prevent **BSR/Auto-RP** information from leaking between the domains. Note: a special protocol called **MSDP** is used to exchange information about the sources in the different domains.
+* To allow routers performing RPF checks, you must exchange information on routes toward the multicast sources in each domain. 
+  You can use routes learned via either IGP or BGP but BGP is most commonly used to exchange this routing information.
+
+In some cases, you may want to apply different policies to unicast-specific routes exchanged via BGP (e.g. force multicast traffic on specific links),so you can use **Multi-Protocol BGP extensions**.  
+You can exchange prefixes under the **“multicast” address-family** and apply a different policy to this information.  
+* These prefixes are interpreted in the same way as the **mroute** command information (static mroutes);
+  i.e. they are used for RPF checks on the router that receives them. 
+  * A prefix is learned via multicast BGP extension, it is assumed to have RPF neighbor toward the next-hop IP address found in the update. 
+  * This information is propagated via BGP to every neighbor configured for the multicast address family.
+  * Multicast prefixes are subject to the same best-path selection procedure, so you may use the same methods of path manipulation that you used with unicast prefixes. 
+
+
+
+# MULTICAST DISCOVERY PROTOCOL (MDSP)
