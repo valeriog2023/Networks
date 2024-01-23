@@ -7,6 +7,17 @@ The process has 2 parts:
   *  Flooding the actual multicast packets down the SPT, while performing Reverse Path
      Forwarding (RPF) to avoid loops.
 
+Multicast ranges are split in sub ranges (see below)
+
+<img src="Multicast_Addresses.png" alt="PTP Message exchange" style="height: 600px; width:800px;"/>
+
+Note also that the multicast Ethernet MAC address range starts at ```01:00:5E:00:00:00``` and goes through ```01:00:5E:7F:FF:FF```.  
+Only low-order 23 bits can vary.
+
+* The low-order 23 bits of the multicast IP address are mapped into the low-order 23 bits of the MAC address.
+* The high order 4 bits of the Layer 3 IP address is fixed to 1110 to indicate the Class D address space between 224.0.0.0 and 239.255.255.255
+* As a consequence there are 32 (32-(23+4)=5 and 2^5=32) IP groups that map to the same MAC address
+
 
 # PIM RPF CHECK AND FORWARDING
 PIM uses the unicast routing table to perform RPF checks.
@@ -357,6 +368,12 @@ Notes:
    *  if we know for sure that there is only a client the router can be configured to immediately stop the traffic and leave the group with: ```ip igmp immediate-leave group-
 list <access-list> ```
 
+# IGMP SNOOPING
+Switches may selectively prune some ports from unneeded multicast traffic. This procedure is called IGMP snooping and allows for selective multicast flooding in switched networks.
+By default igmp snooping is active but you can disable it with the command: ```no ip igmp snooping vlan <VLAN-ID>```  
+You can also check the current state with the command: ```show ip igmp snooping groups vlan <VLAN-ID>```
+
+
 
 # Multicast Helper Map
 The purpose of this feature is to allow forwarding of broadcast traffic across a multicast capable network.   
@@ -462,3 +479,40 @@ You can exchange prefixes under the **“multicast” address-family** and apply
 
 
 # MULTICAST DISCOVERY PROTOCOL (MDSP)
+
+MSDP is used to exchange multicast source information between RPs. It is configured as a TCP connection between the RPs and used to exchange the so-called **Source Active (SA)** messages.  
+All MSDP peerings are configured manually, using the command: 
+```
+ip msdp peer <PEER_IP> connect-source <source_intf> remote-as <remote_as>
+``` 
+at both endpoints.   
+How it works:
+* A source in one PIM SM domain starts sending the multicast traffic
+* The respective DR will start the registration process with the local RP
+* The local RP receives the PIM Register message, it replicates it to all of its MSDP
+neighbors as an SA message. The SA message contains: 
+  * the **IP address of the source** 
+  * the destination group 
+  * the IP address of the RP sending the SA message. This is known as the **MSDP ID** and can be changed using the command ```ip msdp originator-id <IP>```.
+* A MSDP Peer RP receives the SA message and:
+  * it determines whether there are local receivers for the group
+  * If there are, the message is forwarded down the tree, allowing the receivers to learn about the sources in another domain. 
+*  The receivers at this point join/create the SPT toward the source in the other domain. **Note:** This is only possible if the source IP address is learned via BGP or some other protocol. 
+* Periodic and empty (as in no real data) SA messages are used instead to refresh the active state for this group/source.
+
+**Notes for RPF:**
+SAs messages can be relayed from RP to RP in a chain so, to avoid loops:
+* MSDP SA messages are alo subjected to RPF check: MSDP peer forwards SAs only if they pass the RPF check performed against the RP IP address (originator-ID) inside the message and the IP address of the MSDP peer that relayed the message. 
+* If the MSDP peer is on the shortest path toward the originating RP, the message is accepted; otherwise it is dropped. 
+* If routing information is missing, you may use the command ```ip msdp default-
+peer``` to identify the upstream RP that forwards SA messages. **RPF checks are not applied to default peers, and all SA messages are accepted**.
+
+# ANYCAST RP
+Anycast RP is a special RP redundancy scenario that allows using redundant RPs sharing the same IP address.  
+**Anycast** means that groups of RPs use the same IP address used by all multicast routers in the domain to build shared trees:  
+* PIM Joins are being sent to the closest RP, based on the unicast routing table. Routers might join shared trees rooted at different RPs. 
+* Different DRs will pick up different physical RPs based on the anycast address to register their local sources.
+* To maintain consistent source information, **MSDP** sessions should be configured between the RPs. Note that it can all be in the same AS
+
+Becasue all routers use the same RP, if one fails, after the routing converges, the other one becomes available (no reconfiguration needed)
+
