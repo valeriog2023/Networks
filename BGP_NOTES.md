@@ -1,4 +1,12 @@
 # BGP NOTES
+
+These are notes for basic BGP protocol.
+MP-BGP and different address families are not covered here..
+See instead:
+* Multicast Notes: multicast address family
+* VRF Lite and MPLS notes: vpnv4 address family
+* VXLAN notes: evpn address family
+
 Notes: 
 * AD is only for routing tables, it does not affect BGP selection process
  IBGP AD 200
