@@ -28,6 +28,9 @@ Notes:
   Default values are 60 and 180 seconds
 * BGP NEXT HOP TRIGGER: ```bgp nexthop trigger delay <seconds>```   
   it reacts to changes to IGP next-hop values, e.g. metric changes or next-hop becoming unreachable
+*
+
+
 
 ## NEIGHBORS
 - TCP port 179; src IP is the interface
@@ -70,7 +73,11 @@ Notes:
     - command: neighbor <IP> fall-over 
     Note that this feature is only efficient when the peering session is established across the non-shared link; 
     when the IGP route to the peer disappear, the neighbor is considered down immediately
-    Again probably we use BFD now..                              
+    - you can also map the fall-over to  **BFD** with : ```neighbor <IP> fall-over bfd  [check-control-plane-failure]```
+    The last option is checking something called Cbit (control-plane bit) and it determines a different behavior for data-plane vs control-plane failure
+    - BFD is configured at the interface level with a syntax like: ```bfd interval 50 min_rx 50 multiplier 3```, the syntax specifies thee transit interval the min receive interval (not to overload the router) and the numpber of packets that can be lost
+    - For multi hop bfd you actually need a bfd tempalte and bfd map
+    - Also BFD can be used for static routes, OSPF, ISIS etc..       
 - ALLOW-AS IN: use: ```neighbor <IP> allowas-in [count]``` 
   if you want to accept routes that have its local AS in the path 
   MPLS PE use (usually) as-override that replaces the incoming AS with the PE AS so that when the update is received it is not dropped                                  

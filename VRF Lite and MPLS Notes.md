@@ -300,4 +300,71 @@ The configuration of sham links is as follows:
   Where <SRC> and <DST> are the IP addresses for the sham-link source and destination. The cost <X> is the OSPF metric value associated with traversing the MPLS core.
 
 
-  # PE-CE Routing with BGP
+# PE-CE Routing with BGP
+Configuring BGP for PE-CE routing requires only activating the respective VRF’s address family under the global BGP process and configuring the BGP peering sessions under this VRF. 
+**There is no need to configure redistribution** : routes are propagated into the VPNv4 table automatically. 
+**Prefix import and export is controlled by the route-target** .
+
+A common problem is the reuse of the same **ASN** number but there are two solutions:
+* Configure the ```allowas-in``` option inbound for the CE peering session. 
+* Configure the ```as-override``` option on the PE routers ( the peering with the CE).  
+  This compares the remote-AS (CE) with the AS number stored in the end of the AS_PATH attribute. If they match, the AS number in AS_PATH is replaced with the local PE router’s AS number ( the AS PATH length does not change so best path selection still works as usal).
+  * To avoid prefixes where the original AS was over-ridden going back to the initial AS you should use the attribute: **Site-Of-Origin** **SoO** (similar to the out applied with a site-map in EIGRP)
+  ```neighbor <IP> soo <VALUE>``` (you can also use a route map to apply it via a ```set extcommunity soo <VALUE> [additive]```)
+  If **soo** is applied at all PE (with the same value) loops are prevented 
+
+# DEFAULT ROUTING AND INTERNET ACCESS
+
+In this (simple) case we inject a default route from the GLOBAL ROUTING TABLE into the VRFs.
+If you instead want to leak a default from a different VRF you can just use the normal **import/export** approach using **RT**.  
+In this case we also setup a NAT configuration (though usually you might want to do that in a Firewall or other device). The overall steps are:
+* Create a special default VRF route that resolves via the global routing table: 
+```ip route vrf <NAME> 0.0.0.0 0.0.0.0 <NEXT_HOP> global``` .   
+* Redistribute this route into MP-BGP to propagate it to all VPN sites.
+* Enable NAT on the Internet and Internal VRF links. 
+* Create a global NAT address pool if needed. This address pool should be reachable via the global routing table.
+* Configure a source NAT translation rule that matches the VPN source IP addresses and specifies either the global pool or the global interface for address translation.   
+Use the keyword ```vrf <VRF_NAME>``` , which selects the source only from the particular VRF. 
+
+Configuration Example:
+
+```
+R6:
+interface <X>
+ ! To the internet (no VRF: global routing table)
+ ip address 160.1.106.1 255.255.255.0
+ ! if we are doing NAT on the router.. (unlikely)
+ ip nat outside
+!
+! default global route in vrf: VPN_A
+ip route vrf VPN_A 0.0.0.0 0.0.0.0 GigabitEthernet <X> <GW> global
+!
+router bgp 100
+ neighbor <GW> remote-as <PUBLIC_AS>
+!
+! we get to the internet by peering with a public GW
+address-family ipv4
+ neighbor <GW> activate
+!
+! inside the vrf we activate a default (redistribute the static)
+address-family ipv4 vrf VPN_A
+ default-information originate
+ redistribute static
+!
+! if we are doing NAT on the router
+interface <Y>
+  ip vrf forwarding VPN_A 
+  ip nat inside
+!
+ip access-list standard VPN_PREFIXES
+ permit 150.1.0.0 0.0.255.255
+!
+ip nat inside source list VPN_PREFIXES interface GigabitEthernet<X> vrf VPN_A overload
+
+!
+! some show commands:
+show ip route
+show ip nat translation [verbose]
+show ip route bgp !in the peers to check they get the default
+
+```
