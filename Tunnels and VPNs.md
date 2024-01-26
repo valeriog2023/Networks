@@ -132,3 +132,129 @@ interface Tunnel0
 ```
 
 # IPSEC Virtual Tunnel Interfaces (VTIs)
+IPsec Virtual Tunnel Interface (VTI) is a tunnel where the payload is directly encapsulated in ESP.
+It is similar to GRE but:
+*  overhead is 24 bytes lower
+   * Remember GRE requires extra 20 (outer IP Header) + 4 (Actual GRE Header) 
+* other non-IP payloads are not supported. (e.g. IS-IS)
+* the IPsec Transform Set must use Tunnel Mode, because there is no other transport header
+
+The configuration of a VTI is identical to a GRE over IPsec tunnel with a Crypto IPsec Profile, except that the **tunnel mode is set to IPsec IPv4 or IPsec IPv6**.  
+* traffic must be routed inside the tunnel (you can use dynamic routing)
+* Peer tunnel termination should be reachable not via the same protocol used in the tunnel
+
+Configuration example:
+```
+crypto isakmp policy 10
+  encr aes 192
+  hash sha384
+  authentication pre-share
+  group 15
+!
+crypto isakmp key <KEY> address <PEER_IP>
+!
+crypto ipsec transform-set <CRYPTO_SET> esp-3des esp-md5-hmac
+  mode tunnel
+!
+crypto ipsec profile VTI_PROFILE
+ set transform-set <CRYPTO_SET>
+!
+!
+interface Tunnel0
+ ip address 192.168.0.1 255.255.255.0
+ ip tcp adjust-mss 1406
+ ip ospf 1 area 0
+ tunnel source Loopback0
+ tunnel destination <PEER_IP>
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile VTI_PROFILE
+```
+
+Note that this tunnel can account for a correct **mtu**; you can see that using ```show interface tunnel0``` that should show **MTU 1446** (for IPSEC in tunnel mode with 54 overhead).  
+Still a good idea however to set use the ```adjust-mss 1406``` with 1406 being the valueyou get by further removing the encapsulated IP + TCP header
+
+
+# DMVPN
+
+Dynamic Multipoint VPN (DMVPN) is a multipoint GRE-based tunneling technology.  
+You have one or more hubs configured as **Next-Hop Resolution Protocol (NHRP) Servers**  that create mappings between:
+* The public IP address used for the tunnel source (**NBMA address**),
+* The private IP address used inside of the tunnel.  
+
+Major points:
+* NHRP mapping is similar to ATM and Frame-Relays Inverse ARP.  
+* Tunnels are created on-demand based on the particular destination of traffic.  
+* Hub and spokes must agree on certain parameters, such as:
+  *  NHRP authentication
+  *  GRE tunnel key number
+  *  Multicast support  
+     Note that multicast works in way similar to frame-relay so, from an IGP routing point of view, 
+     the spokes only learn routes from the hub as they don't see the ther spokes directly.  
+* The spokes have a manual/static mapping between hub’s tunnel address and NBMA address
+* The hub dynamically learns about the spokes through NHRP messages. 
+
+
+The first step to verify a DMVPN setup is to check that the spokes have registered with the hub correctly.
+
+## DMVPN with no Encryption
+This is the basic setup (no encryption used) for a **DMVPN phase1** setup where there is no spoke-to-spoke dynamic tunnel created
+
+```
+[HUB]
+interface Tunnel0
+ ip address 192.168.0.254 255.255.255.0
+ ip nhrp authentication <KEY>
+ ip nhrp map multicast dynamic
+ ip nhrp network-id 1
+ tunnel source <INTF_Y>
+ tunnel mode gre multipoint
+ tunnel key 2
+ no shutdown
+
+
+
+[SPOKE]
+interface Tunnel0
+ ip address 192.168.0.2 255.255.255.0
+ ip nhrp authentication <KEY>
+ ip nhrp map 192.168.0.254 <HUB_PUBLIC_IP>
+ ip nhrp map multicast <HUB_PUBLIC_IP>
+ ip nhrp network-id 1
+ ip nhrp nhs 192.168.0.254
+ tunnel source <INTF_X>
+ tunnel mode gre multipoint
+ tunnel key 2
+ no shutdown
+!
+! point some prefixes to the tunnel
+! or use dynamic routing
+ip route <PREFIX> <MASK> 192.168.0.254
+
+
+! some useful show commands
+show dmpvn
+```
+
+
+## DMVPN adding Encryption
+
+------------
+------------
+# Some MTU considerations
+
+**GRE** can incapsulate multi protocol, not only IP but it requires
+* 4 extra bytes for the GRE Header (point-point) or 8 extra bytes if the tunnel is point-to-multipoint 
+* 20 Bytes for the Outer IP
+If you only tunnel IP you can use ```tunnel mode ipip``` which only adds 20 bytes
+
+**IPSEC** contains
+* ESP constant: SPI(4) + SN(4) + PADLength(1) + NextHeader(1) = 10
+* ESP-AuthData: always truncated to 12 Bytes
+* AES-CBC (RFC 3602): IV(16) + MaxPadding(15)
+* ESP in tunnel mode adds 20 Bytes for a tunnel IP Header. (Transport mode doesn't).
+
+So overall MAXIMUM ESP(AES) overhead = 10 + 12 + 31 = 53. Obviously the padding cannot be odd, so use 54 as the MAXIMUM overhead.
+The adjust-mss size should consider additional 20 bytes for TCP Header
+
+
+
