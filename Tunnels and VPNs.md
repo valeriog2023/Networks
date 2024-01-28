@@ -222,7 +222,7 @@ interface Tunnel0
  ip nhrp network-id 1
  ip nhrp nhs 192.168.0.254
  tunnel source <INTF_X>
- tunnel mode gre multipoint
+ tunnel destination <HUB_PUBLIC_IP>
  tunnel key 2
  no shutdown
 !
@@ -238,6 +238,265 @@ show dmpvn
 
 ## DMVPN adding Encryption
 
+The configuration is basically the same as before but in addition we need:
+* Crypto isakmp policies and transform set
+  * the HUB uses 0.0.0.0 as the Peer IP because it will accept connections from every IP
+    You might want however to implement Certificates to prevent security issues..
+    In this case for instance, if the key gets compromised, you have to change all SPOKEs keys..
+  * ESP is used in **transport** mode because we already have a tunnel
+* Add the tunnel protection ipsec profile <PROFILE_NAME> to the tunnel
+  *  also note that the MTU will have to be lowered to 1400
+* This is still DMVPN phase1 design.. so all traffic goes through the HUB
+  * If you enable routing, remember to **disable split-horizone on the HUB**  
+  * If you enable OSPF, the HUB tunnel must be set to **point-to-multipoint** (default for tunnel is point-to-point); then either:
+    * the spokes are also changed to **point-to-multipoint**
+    * the timers must be changed to match (either on the spokes (point-to-point) or on the hub )
+
+Configuration example:
+```
+! SPOKE
+crypto isakmp policy 10
+  encr aes 128
+  hash sha256
+  authentication pre-share
+  group 16
+!
+crypto isakmp key <KEY> address <HUB_PUBLIC_IP>
+!
+crypto ipsec transform-set <SET-1> esp-aes 256 esp-sha512-hmac
+  mode transport
+!
+crypto ipsec profile DMVPN_PROFILE
+  set transform-set <SET-1>
+!
+interface Tunnel0
+  ip address 192.168.0.1 255.255.255.0
+  ip mtu 1400
+  ip nhrp authentication <TUNNEL_KEY_STRING>
+  ip nhrp map 192.168.0.254 <HUB_PUBLIC_IP>
+  ip nhrp map multicast <HUB_PUBLIC_IP>
+  ip nhrp network-id 1
+  ip nhrp nhs 192.168.0.254
+  ip tcp adjust-mss 1360
+  tunnel source <SRC_INTF>
+  tunnel destination <HUB_PUBLIC_IP>
+  tunnel key 2
+  tunnel protection ipsec profile DMVPN_PROFILE
+  no shutdown
+
+
+! HUB
+crypto isakmp policy 10
+  encr aes 128
+  hash sha256
+  authentication pre-share
+  group 16
+!
+crypto isakmp key <KEY> address 0.0.0.0
+!
+crypto ipsec transform-set <SET-1> esp-aes 256 esp-sha512-hmac
+  mode transport
+!
+crypto ipsec profile DMVPN_PROFILE
+  set transform-set <SET-1>
+!
+interface Tunnel0
+  ip address 192.168.0.254 255.255.255.0
+  ip mtu 1400
+  ip nhrp authentication <TUNNEL_KEY_STRING>
+  ip nhrp map multicast dynamic
+  ip nhrp network-id 1
+  ip tcp adjust-mss 1360
+  tunnel source <SRC_INTF>
+  tunnel mode gre multipoint
+  tunnel key 2
+  tunnel protection ipsec profile DMVPN_PROFILE 
+  no shutdown
+```  
+
+
+## DMVPN PHASE 2
+
+In DMVPN Phase2, the spokes initially create a connection to the **HUB** but this time they are using a ```tunnel mode gre multipoint``` and the spokes can dynamically create tunnels towards other spokes so that forward plane traffic does not need to croos through the HUB.  
+In orer to do this, the spokes need to learn about the prefixes in the topolocy that are behind spokes and in particular:
+* The hub cannot summarize routes between the spokes
+* The routing protocol used must support maintaining the next-hop of the spokes.
+  * If you use **EIGRP**, this requires the command: ```no ip next-hop-self eigrp``` (if you use classic EIGRP) or the command: ```no next-hop-self``` under the **tunnel af-interface** in
+    EIGRP Multi-AF 
+    * The command: ```no split-horizon``` is still required
+  * if you use **OSPF**:
+    * change the network to either **broadcast** or **non-broadcast** : both network types require a DR and the DR will not change the next-hop ip
+    * set ```ip ospf priority 0``` on the spokes
+    * the spokes will establish a full neighbour only with the HUB but resolve the spoke IPs
+      via NHRP when forwarding traffic
+
+The spokes can then perfom next-hop resolution querying the **nhrp-server** configured, setup
+the **IPSEC** tunnel and start forwarding traffic
+
+Note that the configuration for the tunnel side is basically the same except the wildcard for the IKE key and the use of gre multi point; the actual difference is in the routing protocol configuration.
+
+Configuration example:
+```
+! SPOKE
+crypto isakmp policy 10
+  encr aes 128
+  hash sha256
+  authentication pre-share
+  group 16
+!
+crypto isakmp key <KEY> address 0.0.0.0
+!
+crypto ipsec transform-set <SET-1> esp-aes 256 esp-sha512-hmac
+  mode transport
+!
+crypto ipsec profile DMVPN_PROFILE
+  set transform-set <SET-1>
+!
+interface Tunnel0
+  ip address 192.168.0.1 255.255.255.0
+  ip mtu 1400
+  ip nhrp authentication <TUNNEL_KEY_STRING>
+  ip nhrp map 192.168.0.254 <HUB_PUBLIC_IP> 
+  ip nhrp map multicast <HUB_PUBLIC_IP>
+  ip nhrp network-id 1
+  ip nhrp nhs 192.168.0.254
+  ip tcp adjust-mss 1360
+  tunnel source <SRC_INTF>
+  tunnel mode gre multipoint
+  tunnel key 2
+  tunnel protection ipsec profile DMVPN_PROFILE
+  no shutdown
+
+
+! HUB
+crypto isakmp policy 10
+  encr aes 128
+  hash sha256
+  authentication pre-share
+  group 16
+!
+crypto isakmp key <KEY> address 0.0.0.0
+!
+crypto ipsec transform-set <SET-1> esp-aes 256 esp-sha512-hmac
+  mode transport
+!
+crypto ipsec profile DMVPN_PROFILE
+  set transform-set <SET-1>
+!
+interface Tunnel0
+  ip address 192.168.0.254 255.255.255.0
+  ip mtu 1400
+  ip nhrp authentication <TUNNEL_KEY_STRING>
+  ip nhrp map multicast dynamic
+  ip nhrp network-id 1
+  ip tcp adjust-mss 1360
+  tunnel source <SRC_INTF>
+  tunnel mode gre multipoint
+  tunnel key 2
+  tunnel protection ipsec profile DMVPN_PROFILE 
+  no shutdown
+
+
+! -- somw useful show commands:
+show ip nhrp
+show dmvpn
+show crypto isa sa
+```
+
+## DMVPN Phase 3
+
+This is basically the same as Phase2 but sending a default route to the **SPOKEs**:
+* In **EIGRP** you would configure a ```summary-address 0.0.0.0 0.0.0.0``` on the **HUB** af-interface tunnel0 (or on the actual tunnel if you use classic eigrp)
+* The HUBs also require the command: ```ip nhrp redirect``` on the tunnel interface
+  and send a redirect
+* The spoke also require the command: ```ip nhrp shortcut``` on the tunnel interface
+  so that when they receive a redirect from the HUB, they create a new tunnel to the 
+  spoke as instructed by the HUB  
+   
+
+
+## VRF AWARE DMVPN
+
+This is used to implement something called: **Front Door VRF (FVRF)** where:
+* Underlay routing in the spokes is done in a specific vrf
+* The spokes can use a default route in the underlay vrf to establish tunnel
+  * In the configuration example we configure a default static route but
+    you can actually configure **BGP** in the underlay (and possibly in the overlay too)
+    This makes the design more flexible, e.g. you can use a loopback as a tunnel source
+    and advertise the loopback in the underlay BGP to establish connectivity over multiple paths, etc..
+* The spokes will learn all the other routes (and possibly a different default) 
+  via the tunnel (and keep those in the Global routing table)
+
+Configuration notes:
+* You need to use a vrf aware IPSEC config with a crypto keyring: 
+  ```
+  crypto keyring <NAME> vrf <UNDERLAY_VRF>
+  pre-shared-key address 0.0.0.0 0.0.0.0 key <KEY>
+  ```     
+* tunnel source interface and underlay default must be in the <UNDERLAY_VRF>
+* tunnel interface **IS NOT** in the <UNDERLAY_VRF> **but** in the global routing table
+* tunnel interface must be made **vrf aware** with the command: ```tunnel vrf <UNDERLAY_VRF>```
+
+Configuration example :
+```
+
+[UHB]
+!
+vrf definition UNDERLAY
+  rd 1:1
+  address-family ipv4
+  exit-address-family
+!
+crypto keyring VRF_AWARE_PSK vrf UNDERLAY
+  pre-shared-key address 0.0.0.0 0.0.0.0 key <PSK_KEY>
+!
+crypto isakmp policy 10
+  encr aes
+  hash sha256
+  authentication pre-share
+  group 16
+!
+crypto ipsec transform-set SET-1 esp-aes 256 esp-sha512-hmac
+ mode transport
+!
+crypto ipsec profile DMVPN_IPSEC
+ set transform-set SET-1
+!
+interface Tunnel0
+ ip address 192.168.0.254 255.255.255.0
+ ip nhrp authentication <TUNNEL_KEY>
+ ip nhrp map multicast dynamic
+ ip nhrp network-id 1
+ ip nhrp redirect
+ ip mtu 1400
+ ip tcp adjust-mss 1360
+ tunnel source <interface X>    ! source in the vrf : UNDERLAY
+ tunnel mode gre multipoint
+ tunnel key 2
+ tunnel vrf UNDERLAY            ! -> this maskes the tunnel "vrf aware"
+ tunnel protection ipsec profile DMVPN_IPSEC
+
+interface <X>
+ vrf forwarding UNDERLAY
+ ip address <public IP> <mask>
+
+ip route vrf UNDERLAY 0.0.0.0 0.0.0.0 <public IP next hop>
+
+[SPOKES]
+The spokes are configured basically in the sam way
+The only difference is the NHRP config in the tunnel interface
+that is the one for a spoke, i.e.
+!
+! (SPOKE SPECIFIC CONFIG)
+ip nhrp map 192.168.0.254 <HUB_PUBLIC_IP>
+ip nhrp map multicast <HUB_PUBLIC_IP>
+ip nhrp shortcut    ! -> for phase3
+!
+instead of (HUB SPECIFIC CONFIG)
+ip nhrp map multicast dynamic
+ip nhrp redirect    ! -> for phase3
+
+```
 ------------
 ------------
 # Some MTU considerations
