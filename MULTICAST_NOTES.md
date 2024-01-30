@@ -438,6 +438,7 @@ Noes:
       (i.e, the OIL for (*,G) is empty), or forwarded down the BiDir tree.
       *  This means that ```ip pim accept-register``` will not work with PIM BiDir, because there are    
          **“register-stop”** messages.
+* Note: and interesting use of PIM Bidr is with VXLAN in case the of a flood and learning configuration
 
 Configuration is simple:
 * Enable BiDir PIM on all multicast routers with:  ```ip pim bidir-enable``` 
@@ -478,12 +479,16 @@ You can exchange prefixes under the **“multicast” address-family** and apply
 
 
 
-# MULTICAST DISCOVERY PROTOCOL (MDSP)
+# MULTICAST SOURCE DISCOVERY PROTOCOL (MSDP)
 
 MSDP is used to exchange multicast source information between RPs. It is configured as a TCP connection between the RPs and used to exchange the so-called **Source Active (SA)** messages.  
 All MSDP peerings are configured manually, using the command: 
 ```
 ip msdp peer <PEER_IP> connect-source <source_intf> remote-as <remote_as>
+
+on a nexus you would use instead:
+ip pim rp-address <rp> group-list <multicast_address/mask>
+ip pim anycast-rp <rp> <peer_ip>
 ``` 
 at both endpoints.   
 How it works:
@@ -516,3 +521,5 @@ Anycast RP is a special RP redundancy scenario that allows using redundant RPs s
 
 Becasue all routers use the same RP, if one fails, after the routing converges, the other one becomes available (no reconfiguration needed)
 
+**NOTE:** an interesting use of anycast RP and MSDP is with VXLAN.. in case Multicast is used for flood and learn, you want to configure 
+multiple RPs and keep them up-to-date
