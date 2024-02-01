@@ -80,7 +80,15 @@ Notes:
     - Also BFD can be used for static routes, OSPF, ISIS etc..       
 - ALLOW-AS IN: use: ```neighbor <IP> allowas-in [count]``` 
   if you want to accept routes that have its local AS in the path 
-  MPLS PE use (usually) as-override that replaces the incoming AS with the PE AS so that when the update is received it is not dropped                                  
+  MPLS PE use (usually) as-override that replaces the incoming AS with the PE AS so that when the update is received it is not dropped      
+* **Dynamic Neighbours**: BGP does support dynamic neighbours IP (one side) with the commands below. You will have to specify:
+ * A peer group with the properties to use for the neighbours (ASN, etc..) 
+ * The range to match (optional)
+ * The max number of dynamic neighbours you want to allow (optional)     
+  ```
+  bgp listen range <network/mask> peer-group <peer-group-name>
+  bgp listen limit <max-number>
+  ```                              
 
 ## ROUTES EXCHANGES
 - IGP synchronization: now nostlydisabled; it used to require that for every IBGP route a matching IGP route should be present)
@@ -203,18 +211,19 @@ Side Note that a way to reduce network instability is by using aggregation
          
 
 # EQUAL/UNEQUAL COST PATH LOAD BALANCING
-  requriements (equal cost path lo):
+  Requriements for equal cost multipath:
   - same attributes up to MED
-  - same type (either iBGO or eBGP)
+  - same type (either iBGP or eBGP)
   - same IGP cost to next-hop
-  - command: maximum path [ibgp] <number>
-  unequal cost:
+  - command: ```maximum path [eibgp] <number>```
+  
+  Requirements for unequal cost multipath:
   - command: maximum path [ibgp] <number>
   - enabled on border router with:
-     - global bgp command:  bgp dmzlink-bw
-     - per neighbor: neigbor <IP> dmzlink-bw to select which neighbor load balance with 
+     - global bgp command:  ```bgp dmzlink-bw```
+     - per neighbor: ```neigbor <IP> dmzlink-bw``` to select which neighbor load balance with 
   - the ebgp prefixes will carry a new attribute (ext community) with the bandwith of the link to the neighbors
-    so send-community extend is required   
+    so ```send-community extend``` is required   
 
 ## AGGREGATION
   - to aggreagte IGP routes you can create a static route to null 0 and use the newtok command
