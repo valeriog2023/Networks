@@ -416,4 +416,107 @@ show ip bgp <prefix/mask> detail vrf A
 
 If your LEAFs switches have single home devices, you might also have to add a per overlay vrf MLAG IBGP peering to avoid that the single homed hosts become isolated 
 
-## MULTI POD AND EXTERNAL CONNECTIVITY
+# MULTI POD AND EXTERNAL CONNECTIVITY
+
+When we talk about a **POD** here we refer to:
+* a set of **SPINES**
+* a set of **LEAF** connected to the SPINEs
+
+VXLANs Domains in their simplest design cover a POD; if the SPINEs are modular switches with 
+hundreds of interfaces, the LEAF may as well cover a small DATACENTRE or a DATAHALL but more
+often than not, if you have **TOP-of-RACK** deployment, a pod will actually cover a single
+DATACENTRE ROW.
+
+If you have multiple ROWs you might want to extend your VXLAN so that the same L2 domain
+is available in multiple pods but how are SPINEs of different PODs connected?
+
+A different question is instead how does traffic leaves the VXLAN fabric? Or how is it routed in between different VRFs?
+
+To be honest, for both questions, there exists many possible designs
+
+The int​erc​onn​ect​ion within a multi-POD site can be achieved in vari​o​us ways:
+* Spines can be int​erc​onn​ected back to back (limited to small-scale desing)
+* An add​it​ional sup​er-spine layer can be int​rod​uced and this can either
+  * Extend the underlay to provide VTEP rougin info from all the pods
+  * Implment CORE routing IP when OVERLAY is terminated at the SPINEs (that can, per VRF, aggregate and advertise the PODs supernets)
+* PODs can be int​erc​onn​ected at desi​gn​ated leaf switches. (BORDER-LEAF)
+
+Multi-POD des​igns can also be stretched across physi​c​al loc​at​ions, howe​ver, this is not the reco​mm​end​at​ion.  
+
+When cons​ide​ri​ng **north-south** conn​ect​ivi​ty, the first opt​ion in a multi-POD des​ign is to cons​oli​d​ate all ext​ern​al conn​ect​ivi​ty into a sing​le point of acc​ess.  
+Alt​ern​ately, sing​le points of acc​ess for each ind​iv​idu​al POD for dist​ribu​ted ingress and egress forw​ardi​ng can be defined, e.g. a pair of BL per POD.
+
+   
+The **east-west** best solution is a multi-stage hie​ra​rc​hic​al fabr​ic topolo​gy. MP-BGP EVPN is run-​ ning bet​ween the Fabr​ic nodes to dist​ribu​te the VXLAN EVPN routes. This multi-stage fabr​ic des​ign with a sup​er-spine layer simp​lif​ies the int​erc​onn​ect​ion topolo​gy among PODs, maki​ng it easi​er to scale the numb​er of PODs.  
+If multicast is required for **BUM** traffic, you should include consideration about the available **Outbound IFnterfaces (OIFs)** supported to consider the ones used as upstream
+towards the Super-Spines.  
+In add​it​ion, cons​ide​ra​t​ion needs to be given to host MAC and IP scale per leaf. A leaf will learn all BGP routes across the multi-POD env​ir​onm​ent but will not prog​ram the hardw​are tab​les Forw​ardi​ng Inf​orm​at​ion Base / Routi​ng Inf​orm​at​ion Base (FIB/RIB) unl​ess the leaf needs to know about them (i.e. only the ones imported via **rt**).
+
+EVPN MP-BGP cont​rol prot​oc​ol runs througho​ut multi-PODs the same way as it does within a sing​le-POD:  
+* Each VTEP dev​ice det​ects its local endp​oints and ins​talls HMM routes for endp​oint tracki​ng. 
+* The HMM routes are aut​om​ati​c​ally inj​ected into MP-BGP EVPN add​ress-fami​ly and dist​ribu​ted to other EVPN nodes as EVPN type-2 routes.
+* The rest of the VTEPs will ins​tall the endp​oint reacha​b​ili​ty inf​orm​at​ion into their L2 RIB and L3 RIB tab​les. 
+
+Within a POD, EVPN sess​ions are formed bet​ween leaf and spine nodes. 
+Bet​ween PODs, EVPN peeri​ng does not nece​ss​ari​ly need to coi​nc​ide with the physi​c​al conn​ection topolo​gy and again the choice between **EBGP and/or IBGP** will determine the actual configuration; IF IBGP is used either within the pod or in the wholse site, the SPINEs are usually configured as **Route Reflectors**
+
+<p>
+
+**IBGP POSSIBLE SETUP**
+
+<img src="Multi-Pod_VXLAN_IBGP.png" alt="Mutli POD VXLAN as SINGLE AS" style="height: 500px; width:800px;"/>
+
+The Figu​re does not ind​ic​ate any physi​c​al topolo​gy for conn​ecti​ng mult​ip​le PODs tog​ether rather, it dep​icts the peeri​ng topolo​gy.. however I think that in the diagram in the picture, either the SPINEs RR are peering directly or, if they peer with the super spines, the Super Spines will also have to be RR
+IBGP will:
+
+   
+A sing​le BGP AS across all PODs so that the multi-POD Fabr​ic runs EVPN MP-iBGP has the advantages:
+* next-hop will not change (there is no trnsition from one AS to another)
+* communities like RT, when generated via: ```auto-rt``` will be consistent
+
+**However I think it's definitely better to have a different ASN per pod and one ASN for the superspines** (see below)
+
+
+**EBGP POSSIBLE SETUP**
+
+<img src="Multi-Pod_VXLAN_EBGP.png" alt="Mutli POD VXLAN as Multiple AS" style="height: 500px; width:800px;"/>
+
+With this des​ign, BGP peeri​ng among mult​ip​le PODs is simp​le. EVPN routes can be dis-​ tribu​ted among PODs through MP-eBGP peeri​ng witho​ut the need for add​it​ional con-​ figu​r​at​ion.  
+Add​it​ional cons​ide​ra​t​ions need to be given to how to pres​erve the att​ribu​tes in an EVPN route when it is dist​ribu​ted within the Fabr​ic as eBGP def​ault beh​avi​or may cause some of the att​ribu​tes to be overwritten:
+
+*  By def​ault, a router overw​rites the next-hop in the route to its​elf when sendi​ng a route to its eBGP peers.
+*  If each AS gene​ra​tes EVPN route-targ​ets (RT) aut​om​ati​c​ally, they may end up having diff​ere​nt RTs for the same L2VNI or L3VNI 
+  * Do not use :  ```auto-RT``` as it might use the BGP ASN
+
+## IP Multicast Replication vs Ingress Replication
+In a multi-pod scenario, **Ingress replic​at​ion** can have scale iss​ues as the switch needs to replic​ate BUM packe​ts as many times as there are VTEPs that own the VNI needi​ng to see that traff​ic.   
+**IP mult​ic​ast** across a multi-POD env​ir​onm​ent is more scala​ble sol​ut​ion to hand​le BUM traff​ic.  
+Usually:
+*  An **anyc​ast RP** is conf​igu​red and the RP routers share a sing​le unic​ast IP add​ress bet​ween PODs. This method prov​ides RP red​und​ancy and load shari​ng within the dom​ain.   
+*  Sources from one RP are known to other RPs in other PODs using the Mult​ic​ast Source **Disc​ove​ry Prot​oc​ol (MSDP)**. 
+*  PIM-SM RP and RP red​und​ancy are placed in every POD.
+
+## External connctivity 
+The Fabr​ic bord​er prov​ides an edge funct​ion to allow for ext​ern​al conn​ect​ivi​ty in and out of the Fabr​ic and also prov​ides an att​achm​ent point for the DCI serv​ices which del​iver the req​uired int​er-site conn​ect​ivi​ty. 
+Border LEAF can be used to connect to External Devices like Firewalls or other L3 external devices (not considering here the case of extending L2 domains) for both inter-VRFs communications (assuming multiple VRFs are inside the evpn domain) and access to external
+resources.
+Routing in/out from the fabric can either be done:
+* via static routing, assuming you can aggregate all the subnets of vxlan domain/VRF in some supernets. In this case you will have to redistribute static routes on the BL
+* via BGP or other protocol and again unless it's BGP you will have to refistribute the protocol
+  in the BGP VRF config
+
+In both cases, the routes learned by the BL will be redistributed to other EVPN peers as route-type5 and imported/exported with the normal rules
+
+Note also that:
+* If you have a single pair of BORDER LEAF that can cause scalability issues because all
+  external/internal traffic will have to go through those
+* If you "cluster" the scope of you L3 subnets and/or exit points, You will have path of 
+  different routing path with different latency metrics  
+  e.g.  
+  * Let's say pod1,2,3 share the L3/L2 subnets and go out from BL in pod1, so if a host is in   pod3, traffic to an external  
+   destination will go through: pod3 LEAFs, pod3 SPINEs, super-spines, pod1 SPINEs, pod1 BORDER-LEAF  while if the host is in pod1, the same destination will be reached through, POD1 LEAF, pod1 SPINE, pod BORDER-LEAF 
+  * This **hairpinning** can become **worse** for traffic between different VRFs, for instance
+    if two hosts are on pod3 LEAF but different VRFs, packts will have to go back and forth to pod1 external device to be re-routed back. **Also this can cause different latency metrics if the hosts move from one pod to another**. While this problem can also be seen if the hosts are in the same L2 domain (different latency for hsots on the same switch and/or different LEAF/PODs) it will become worse for inter-vrf traffic (Note: might still not be a problem.. it depends..)
+*  if you have an exit point per pod, you have an ideal network traffic routes, however this will require to multiple the number of exit points per pod.. so could be very expensive.
+    
+
