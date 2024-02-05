@@ -12,11 +12,13 @@ Multicast ranges are split in sub ranges (see below)
 <img src="Multicast_Addresses.png" alt="PTP Message exchange" style="height: 600px; width:800px;"/>
 
 Note also that the multicast Ethernet MAC address range starts at ```01:00:5E:00:00:00``` and goes through ```01:00:5E:7F:FF:FF```.  
-Only low-order 23 bits can vary.
+Only low-order 23 bits can vary
 
 * The low-order 23 bits of the multicast IP address are mapped into the low-order 23 bits of the MAC address.
 * The high order 4 bits of the Layer 3 IP address is fixed to 1110 to indicate the Class D address space between 224.0.0.0 and 239.255.255.255
 * As a consequence there are 32 (32-(23+4)=5 and 2^5=32) IP groups that map to the same MAC address
+
+So for instance *224.0.0.5, 224.128.0.5, 225.0.0.5*, etc.. would all be mapped to ```01:00:5e:00:00:05```
 
 
 # PIM RPF CHECK AND FORWARDING
@@ -101,7 +103,7 @@ You can tunnel multicast to traverse networks that do not support it, however re
 PIM SM builds explicit multicast distribution trees from the receivers to the sources. 
 It uses Rendezvous Point (RP) to faciliate discovery of endpoints (sources/destinations):
 *  An RP is a router known to both sources and receivers. 
-   *  A Receiver (for a group: G) router first builds a tree to the RP; this is called **SHARED TREE** or (*,G)
+   *  A Receiver router (for a group: G) first builds a tree to the RP; this is called **SHARED TREE** or (*,G)
       This is done by sending upstream **PIM JOIN** messages toward the RP
    *  When a source appears in the network, the **closest multicast router** will contact the RP 
       using **PIM Register** messages; these messages are encapsulated in a unicast packet and sent to the RP. 
@@ -158,6 +160,7 @@ the downstream router would see, accept and forward packets from both.
    *  metric and router ip on the segment are used as possible tie breaker if required 
 *  The loser  will remove the (S,G) state on its interface and stop flooding traffic.
 *  The winner, it will emit a superior PIM Assert message (so the other router will stop)
+
 **Notes:** 
 *  PIM Assert procedure might be dangerous on NBMA interfaces.  
    E.g. e a hub-and-spoke DMVPN; if for the Spoke wins, the hub stops sending multicast;
@@ -178,6 +181,7 @@ ip pim accept-rp [<rp-address> | auto-rp] [<access-list-name>]
 When configured the router will only accept **join/prune** messages for  (*,G) the specific RP
 This means a client can't create a SPT through this router if the RP is not the one allowed.
 The access-list is used, then only **Join/Prune** messages for the groups in the acl are accepted.
+
 **Notes:** 
 *  (S,G) join/prune are not affected
 *  auto-rp: when used it means only RP learnt via auto-rp
@@ -196,23 +200,24 @@ it sends a **PIM Register-Stop** to the DR immediately and never builds the SPT 
 
 
 ## PIM SPARSE MODE - AUTO-RP
-This is actually quite an old protocol, replaced by BSR.
+This is actually quite an old protocol, replaced by **BSR**.  
 Auto-RP works based on:
-*  Candidate RP (cRP) : any router that wants to become an RP
+*  Candidate RP (CRP) : any router that wants to become an RP
 *  Mapping Agents (MA): will forward information about groups and RP
 
 CRP are configured with:
 ```
 ip pim send-rp-announce <Interface> scope <TTL> [group-list <Std-ACL>] [interval <seconds>]
 ```
-These routers will send UDP packets to the IP/Port 224.0.1.39/496 with the list of groups (default is 60 seconds). 
-*  <TTL> is used to limit the scopeThe interface
-*  <Interface> must be enabled for PIM and its IP address will be used as the RP’s IP. 
-*  <Std-ACL> lists the groups for which we want to become the RP
+These routers will send UDP packets to the IP/Port **224.0.1.39/496** with the list of groups (default is 60 seconds). 
+*  `<TTL>` is used to limit the scopeThe interface
+*  `<Interface>` must be enabled for PIM and its IP address will be used as the RP’s IP. 
+*  `<Std-ACL>` lists the groups for which we want to become the RP  
    Notes: 
    *  wildcard masks are converted to prefix-lengths, so you cannot use discontinuous masks. 
-   *  “deny” statements are interpreted as groups that should be trated as "dense" mode
-The cRP announcements are flooded across the network and reach the Mapping Agents that lsiten for 224.0.0.39. 
+   *  “deny” statements are interpreted as groups that should be trated as "dense" mode  
+
+The cRP announcements are flooded across the network and reach the Mapping Agents that lsiten for **224.0.0.39**.  
 You configure these routers using the command:
 ```
 ip pim send-rp-discovery <Interface> scope <TTL> interval <Seconds> . 
@@ -223,23 +228,23 @@ Mapping Agents compile a list of **Group to RP mappings** and send **“RP disco
    will cease sending discoveries.
 *  if the same group is mapped to multiple RP, the MA will select the the highest RP IP address.
 *  if there are two announcements where one group is a subset of another but the RPs are different, both will be sent.
-*  All regular routers join the multicast group 224.0.1.40 and listen to the discovery messages and use them to populate
-   their cache
+*  All regular routers join the multicast group **224.0.1.40** and listen to the discovery messages and use them to populate
+   their cache:
    * Negative entries in the cache/discovery are considered first, groups in negative message will be 
      seen as DENSE and RP info ignored. 
    * Positive Entries are selected based on longest match
    * Note that a single negative entry could blacklist multiple positive (as it is considered first)
-*  Groups: 224.0.1.39, 224.0.1.40 are propagated across in **dense mode** thorugh the network. (there is no RP)
-   This requires: ```ip pim sparse-dense-mode``` on all interfaces within the multicast domain. You may also
+*  Groups: 224.0.1.39, 224.0.1.40 are propagated across in **dense mode** thorugh the network. (there is no RP) and
+   this requires: ```ip pim sparse-dense-mode``` on all interfaces within the multicast domain. You may also
    want to use the ```no ip dm-fallback``` global command.
    *  An alternative to **spare-dense** mode for 224.0.1.39, 224.0.1.40, is to use **Auto-RP Listener**  
       It will only allows those 2 groups to work in **dense** mode and it does not use sparse-dense on the interface 
       (only normal sprse mode)
-   *  In NBMA, you ned to place MA in the Hub because **ip pim nbma** only works in sparse mode but the 2 groups
+   *  In an **NBMA**, you need to place the MA in the Hub and because **ip pim nbma** only works in sparse mode but the 2 groups
       forward traffic in dense mode (the RP can still be some place else)  
-*  If you define a static RP for 224.0.1.39 and 224.0.1.40. This will require you to use the ```override```
+*  If you define a static RP for a group but also have Auto-RP, you need to use the option ```override```  
    By default, Auto-RP announcements override a statically configured RP so uf you want them to persist, use
-   the override keyword along with the ip pim rp-address command.
+   the override keyword along with the `ip pim rp-address` command.
 *  You can do load balancing and redundnacy by setting:
    * RP1 primary for longest match set of prefixes(1), secondary for summarized set of prefixes(2)
    * RP2 primary for longest match set of prefixes(2), secondary for summarized set of prefixes(1)
@@ -260,7 +265,7 @@ ip pim rp-candidate <PIM-Enabled-Interface> [group-list <Standard-ACL>] [interva
 ```
 **Notes:**
 *  If you omit all arguments, the router will start advertising itself as the RP for all groups. 
-*  You may specify a list of groups using the group-list argument (you cannot use “negative”groups).  
+*  You may specify a list of groups using the group-list argument (you cannot use *“negative”* groups).  
 *  Priority value is used when the routers select the best RP for a given group (lower is prefered, default is zero)
    You can change the priority of an RP if you want to gracefully shut it down
 *  you can filter BSR messages with the interface command: ```ip pim bsr-border```: message will not be flooded or
@@ -340,8 +345,8 @@ This report contains the multicast group that the host wants to join.
 The multicast router may control groups allowed with the interface command: ```ip igmp access-group <ACL>```; Note that you could also use: ```ip multicast boundary``` , but
 ip the igmp command is more common.   
 Note that: 
-*  if <ACL> is a standard access-list, the filter will be applied on the group IP. 
-*  If <ACL> is an extended access-list, this will apply alo to IGMPv3 reports that allows to speficy Sources and Groups
+*  if `<ACL>` is a standard access-list, the filter will be applied on the group IP. 
+*  If `<ACL>` is an extended access-list, this will apply alo to IGMPv3 reports that allows to speficy Sources and Groups
 
 The command: ```ip igmp limit <N>``` can instead be applied globally or per interface and it limits the number of multicast group joined by connected receviers (globally or per interface)
 
@@ -364,7 +369,7 @@ Notes:
 * IGMP v1 does not have explicit LEAVE messages so multicast is sent until a timer expires with no requests for a group
  ```ip igmp query-max-response-time [time-in-seconds]```
 * Response to IGMP Membership Queries are broadcasted in the LAN so that when a host replies, the others will know it and not send any other response
-*  if an IGMP v2 LEAVE Message is sent, the querier need to check if there are other cliets and sends out **Last Member Query**; the number of these queries (default: 2) is controlled by ```ip igmp last-member-query-count <N>``` and the time it wait for a response (default: 1sec)is controlled by ```p igmp last-member-query-interval <milliseconds>``` 
+*  if an IGMP v2 LEAVE Message is sent, the querier need to check if there are other cliets and sends out **Last Member Query**; the number of these queries (default: 2) is controlled by ```ip igmp last-member-query-count <N>``` and the time it wait for a response (default: 1sec)is controlled by ```ip igmp last-member-query-interval <milliseconds>``` 
    *  if we know for sure that there is only a client the router can be configured to immediately stop the traffic and leave the group with: ```ip igmp immediate-leave group-
 list <access-list> ```
 
@@ -421,7 +426,7 @@ R2
 
 # BIDIRECTIONAL PIM (PIM BiDir)
 This is an extension of PIM SM concept that uses only the shared tree for multicast distribution.   
-This mode of operation is useful in situations where most receivers are also senders at the same time (e.g. videoconferencing).  
+This mode of operation is useful in situations where most receivers are also senders at the same time (e.g. videoconferencing but also vxlan deployments where LEAF are both senders and receivers).  
 **PIM BiDir uses a single distribution tree rooted at the RP**. (Note: if there are multiple RPs, there could be many BiDir trees).  
 To build the bi-directional tree, PIM elects **designated forwarders (DFs)** on every link in the network: i.e. the router with the shortest metric to reach the RP. **DF routers** are the only routers allowed to forward traffic toward the RP (this is considered the **“upstream”** portion of the BiDir tree).  
 Every router in the multicast domain creates a (\*,G) state for each BiDir group, with the OIL built based on PIM Join messages received from its neighbors. This is the **“downstream”** portion of the BiDir tree.  
@@ -430,7 +435,7 @@ Now:
 * the DF will also forward a copy of these packets toward the RP 
   * unless that the packet is received on the interface pointing to the RP.
 
-Noes:
+Notes:
 *   PIM BiDir does not utilize the source registration procedure, via PIM Register/Register-Stop messages.   
    *  Every source connected to a PIM BiDir capable router may start sending at any time
    *  The packets will flow upward to the RP (not incapsulated). 
@@ -438,7 +443,7 @@ Noes:
       (i.e, the OIL for (*,G) is empty), or forwarded down the BiDir tree.
       *  This means that ```ip pim accept-register``` will not work with PIM BiDir, because there are    
          **“register-stop”** messages.
-* Note: and interesting use of PIM Bidr is with VXLAN in case the of a flood and learning configuration
+* Note: an interesting use of PIM Bidr is with VXLAN in case the of a flood and learning configuration; The Spines are usually configured as anycast RP, they synchronize using MSDP.
 
 Configuration is simple:
 * Enable BiDir PIM on all multicast routers with:  ```ip pim bidir-enable``` 
@@ -459,6 +464,7 @@ messages. You need to:
     * The **default** keyword means that the range **232.0.0.0/8** is used. 
     * For the groups in the SSM range, no shared trees are allowed and the (*,G) joins are dropped.
 *  Enable IGMPv3 on the interfaces connected to the receivers capable of using this protocol. Without IGMPv3, there can be no use of PIM SSM.
+#
 
 # MULTICAST BGP EXTENSION
 Multicast BGP extension are usually required if you want to exchange multicast traffic betweene different administrative domains.  
@@ -476,17 +482,18 @@ You can exchange prefixes under the **“multicast” address-family** and apply
   * A prefix is learned via multicast BGP extension, it is assumed to have RPF neighbor toward the next-hop IP address found in the update. 
   * This information is propagated via BGP to every neighbor configured for the multicast address family.
   * Multicast prefixes are subject to the same best-path selection procedure, so you may use the same methods of path manipulation that you used with unicast prefixes. 
-
+#
 
 
 # MULTICAST SOURCE DISCOVERY PROTOCOL (MSDP)
 
-MSDP is used to exchange multicast source information between RPs. It is configured as a TCP connection between the RPs and used to exchange the so-called **Source Active (SA)** messages.  
+**MSDP** is used to exchange multicast source information between RPs. It is configured as a TCP connection between the RPs and used to exchange the so-called **Source Active (SA)** messages.  
 All MSDP peerings are configured manually, using the command: 
 ```
+[ios based]
 ip msdp peer <PEER_IP> connect-source <source_intf> remote-as <remote_as>
 
-on a nexus you would use instead:
+[nxos based]
 ip pim rp-address <rp> group-list <multicast_address/mask>
 ip pim anycast-rp <rp> <peer_ip>
 ``` 
@@ -503,14 +510,13 @@ neighbors as an SA message. The SA message contains:
   * it determines whether there are local receivers for the group
   * If there are, the message is forwarded down the tree, allowing the receivers to learn about the sources in another domain. 
 *  The receivers at this point join/create the SPT toward the source in the other domain. **Note:** This is only possible if the source IP address is learned via BGP or some other protocol. 
-* Periodic and empty (as in no real data) SA messages are used instead to refresh the active state for this group/source.
+* Periodic and empty (as in no actuall data) SA messages are used instead to refresh the active state for this group/source.
 
 **Notes for RPF:**
 SAs messages can be relayed from RP to RP in a chain so, to avoid loops:
 * MSDP SA messages are alo subjected to RPF check: MSDP peer forwards SAs only if they pass the RPF check performed against the RP IP address (originator-ID) inside the message and the IP address of the MSDP peer that relayed the message. 
 * If the MSDP peer is on the shortest path toward the originating RP, the message is accepted; otherwise it is dropped. 
-* If routing information is missing, you may use the command ```ip msdp default-
-peer``` to identify the upstream RP that forwards SA messages. **RPF checks are not applied to default peers, and all SA messages are accepted**.
+* If routing information is missing, you may use the command ```ip msdp default-peer``` to identify the upstream RP that forwards SA messages. **RPF checks are not applied to default peers, and all SA messages are accepted**.
 
 # ANYCAST RP
 Anycast RP is a special RP redundancy scenario that allows using redundant RPs sharing the same IP address.  
