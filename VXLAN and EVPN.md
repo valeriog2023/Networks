@@ -16,11 +16,11 @@ Virtual Extensible LAN (VXLAN) is a IP/UDP encapsulation technology that enables
 ## VXLAN Bridge and L2VNI
 <img src="vxlan_bridging.png" alt="VXLAN bridgingg from Arista Deployment Guide" style="height: 600px; width:1000px;"/>
 
-**L2VNI** are used for VXLAN bridging (e.x. traffic from Host A to Host B):
+**L2VNI** are used for VXLAN bridging (e.x. traffic from Host A to Host B in the same VLAN):
 
 1.  SW-A receive a packet from Host A
-    * SRC Mac is Hosst-A mac, SRC IP is Host-A IP
-    * Dest Mac is SW-A mac, Dest IP is Host-B IP 
+    * SRC Mac is Host-A mac, SRC IP is Host-A IP
+    * Dest Mac is Host-B mac, Dest IP is Host-B IP 
 2. SW-A has VLAN 10 mapped to VNI 10010
 3. SW-A encapsulates the ethernet frame in a new IP packet:
    * The VXLAN header records the VNI: 10010
@@ -29,14 +29,16 @@ Virtual Extensible LAN (VXLAN) is a IP/UDP encapsulation technology that enables
    * Sees VNI 10010 in the VXLAN Header
    * has VNI 10010 locally mapped to VLAN 10
 6. SW-B removes the VXLAN header, performs the lookup and forwards the packet in VLAN 10
-7. Host-B sees the packet with Src Mac: Host-A Mac and SRC IP: HOst-A IP
+7. Host-B sees the packet with Src Mac: Host-A Mac and SRC IP: Host-A IP
 
-The VNI even if configured **locally** has a **global** value if things need to be kept consistent.
+The VNI even if configured **locally** has a **global** value if things need to be kept consistent..  
+This meanss you could map athe same VNI to two different VLANs in two different VTEPs and bridge their
+L2 domain.. however it's probably not a good idea.
 
 ## Broadcast, Unknown Unicast and Multicast (BUM).
 To resolve a Host MAC address, an ARP request is sent in broadcast on the segment. Once a VTEP receives a broadcast frame, it must ensure that all VTEPs with endpoints within the respective broadcast domain receive a copy of that frame.  
 
-There are different methods to distribute BUM traffic:
+There are basically 2 different methods to distribute BUM traffic:
 *  **Multicast**: VNIs are mapped to multicast groups on either a 1:1 or N:1 basis.  
    VTEPs then become both Senders and Receivers for the multicast groups
    Arista does not support this in the context of EVPN.  
@@ -44,6 +46,7 @@ There are different methods to distribute BUM traffic:
    This is referred to as a ***Flood List***, and can be either manually maintained via static entries, or dynamically populated via the EVPN control-plane.
    In this case a unique copy of that frame is sent to each respective VTEP within the flood list.
 
+**Note:** I'm not mentioning above EVPN because EVPN has a way to reduce BUM traffic by sharing the mac-ip knowedge etc.. but if there is still BUM traffic it needs to still use either Multicast or Head End Replication.
 
 
 ## Symmetric vs Asymmetric VXLAN routing.
@@ -100,14 +103,14 @@ This NLRI includes fields like (it includes more.. but these are the more meanin
   * L3VNI: 3 octects, note that this field is actually called MPLS Label2  
   * RD of the VTEP advertising it.  
     Note that if we have a pair of LEAF, they will have different RDs and this way a host route-type2 is going to be duplicated in BGP ; this is good however because in case one LEAF goes down, the second entry is already available.  
-  * Addes as extended community also RT  
+  * RT are also added as extended community 
 * **Route-Type 3:** IMET (Inclusive Multicast Ethernet Tag), this is used to advertise otehr VTEPs that we are interested in getting **BUM** traffic for a specific **VNI**
 * **Route-Type 5** This route-type provides the ability to decouple the advertisement of an IP prefix from any specific MAC address, so to optimize the mechanism for advertising IP prefixes. Different uses cases are covered by the DRAFT and this afect the fields in the route-type. Some cases are listed below but in the most common case the **first and the last one are the most important**:
-  * Advertising of IP prefixes behind an appliance. This is useful to support routing outside a VRF, e.g. a BORDER LEAF will have a static route to a firewall (or learned routes) and they will be advertised to the other VTEP via a route-type5 
-  * Support for active-standby deployment of appliances using a shared floating IP model. This is an extension of the previous case where there is now a virtual IP (or VIP) for clustering the appliances, rather than a dedicated physical IP address on the appliance.
-  * Support for Layer 2 appliances, acting as a “bump in the wire” with no physical IP addresses configured, where instead of the appliances having an IP next-hop there is only a MAC next-hop. (Not really sure about)
-  * **IP-VRF to IP-VRF model**, which is similar to inter-subnet forwarding for host routes as part of symmetric VXLAN. 
-  Only Type-5 routes and IP prefixes are advertised, allowing announcement of IP prefixes into a tenant’s EVI domain 
+  1. Advertising of IP prefixes behind an appliance. This is useful to support routing outside a VRF, e.g. a BORDER LEAF will have a static route to a firewall (or learned routes) and they will be advertised to the other VTEP via a route-type5 
+  1. Support for active-standby deployment of appliances using a shared floating IP model. This is an extension of the previous case where there is now a virtual IP (or VIP) for clustering the appliances, rather than a dedicated physical IP address on the appliance.
+  1. Support for Layer 2 appliances, acting as a “bump in the wire” with no physical IP addresses configured, where instead of the appliances having an IP next-hop there is only a MAC next-hop. (Not really sure about)
+  1. **IP-VRF to IP-VRF model**, which is similar to inter-subnet forwarding for host routes as part of symmetric VXLAN. 
+  Only Type-5 routes and IP prefixes are advertised, allowing announcement of IP prefixes into a tenant’s EVPN domain 
    
  <img src="route_type5.png" alt="Route-type5 Use Case" style="height: 600px; width:1000px;"/>  
 
@@ -119,11 +122,11 @@ This NLRI includes fields like (it includes more.. but these are the more meanin
       * The route-target (2000:2000) 
       * The VRF VNI label (2000) 
       * The router-mac extended community of the route with the inner DMAC (equal to system MAC of VTEP-1) for any VXLAN frame destined to advertised IP prefix.
- * Hosts in subnet-B communicating with a host on subnet-A, will (this is basically symmetric VXLAN for routing):
+ * Hosts in subnet-B communicating with a host on subnet-A, will (symmetric VXLAN for routing):
      * send traffic to VTEP-2 in VLAN 11/VNI 1011. 
      * VTEP-2 performs a route lookup for the destination subnet-A.  
        Subnet-A is learned as part of the IP-VRF with **VNI 2000** and the **next-hop of VTEP-1**
-    *  The packet is encapsulated in VXLAN (VNI:2000 and DMAC of VTEP-1) and sent in the underlay to VTEP-1.
+    *  The packet is encapsulated in VXLAN (L3VNI:2000 and DMAC of VTEP-1) and sent in the underlay to VTEP-1.
     *  VTEP-1 de-encapsulates the packet and
        * sees its own MAC as DMAC 
        * it performs a local route lookup for the destination subnet-A in the VRF identified by the L3VNI 2000
@@ -154,7 +157,7 @@ OSPF is usually a Cisco choice in some automated implementation (e.g. DCNM/NDFC)
 Here I just want to have a quick look at the Arista implementation of BGP as underlay.
 We assume that:
 * ALL LEAF Pairs in a POD are in its own LAEF ASN
-  * You could have an ASN per cab but then you would need to specify that outside the **peer group** configuration
+  * You could have an ASN per cab but then you would need to specify that outside the **peer group** configuration and you would not be able to use the **bgp listen range** command.
 * Spines will leave in the SPINE ASN
 * LEAF are connected to spines with (possibly multiple) L3 links using /31 allocation
 * Spines will be configured with ```bgp listen range <subnet/mask> peer-group <group-name>```
@@ -162,8 +165,8 @@ We assume that:
    * LEAF/SPINE Loopback 0 for EVPN peering
    * LEAF Loopback 1 for VTEP termination  
      **Note:** Both **LEAF** in an **MLAG PAIR** have the **same Loopback1** IP Address   
-     **Note:** some scenarios have the SPINEs used as **Border Gateway** for instance toward a Core Networks (this way you can run aggregation on the spines); if that is the case, then they will also need a VTEP termination Loopback
-* maximum path needs tobe configured on the LEAF and spines
+     **Note:** some scenarios have the SPINEs used as **Border Gateway** for instance toward a Core Networks (this way you can run aggregation on the spines); if that is the case, then they will also need a VTEP termination Loopback (also that is not arista design)
+* maximum path needs to be configured on the LEAF and spines
 
 ```
 Excerpt from Arista EVPN Deployment Guide
@@ -174,7 +177,7 @@ peer-filter LEAF-AS-RANGE
 
 router bgp 65001
    router-id 1.1.1.201
-   update wait-install  ! this waits until the prefix is isntalled in hw before advertising it 
+   update wait-install  ! this waits until the prefix is installed in hw before advertising it 
    !
    ! This is required not to activate overlay evpn peering in ipv4
    no bgp default ipv4-unicast
@@ -232,7 +235,7 @@ router bgp 65102
     neighbor MLAG-IPv4-UNDERLAY-PEER activate
 ```
 
-## BGP overerlay (Arista example)
+## BGP overerlay - EVPN AF (Arista example)
 Building on the underlay configured before, this is an example of some overlay setup.
 Note that the choice of different ASN influences the configuration of bgp peering, e.g.
 if we had iBGP, we would not need to configure ```next-hop-unchanged``` when advertising
@@ -296,7 +299,7 @@ Arista supports 2 ways to configure L2 EVPN:
   **Note:** that this uses a VRF VNI in the import export config and not the VLAN
   
 
-The difference is at BGP configuration level, while at VXLAN configuration level they look the same. If have Arista or if the other vendors does support it, use the **vlan-bundle** 
+The difference is at BGP configuration level, while at VXLAN configuration level they look the same. If you have Arista only or if the other vendors does support it, use the **vlan-bundle** 
 
 **VXLAN interface**: All VTEPS need to have a VXLAN interface configured for VTEP; this will include:
 * the reference to source interface for VTEP: Loopback1
@@ -313,6 +316,7 @@ vlan 10
 vlan 50
  name Fifty 
 !
+! The vxlan interface configuration is the same in case mac-vrf is used or not
 interface Vxlan1
    vxlan source-interface Loopback1
    vxlan udp-port 4789                          ! this is the standard port

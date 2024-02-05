@@ -3,7 +3,7 @@
 By default, all interfaces (physical or sub-interfaces) are assigned to a VRF known as the **global**, (i.e. the regular routing table).  
 To create a new VRF, issue the command:
 ```
-! create a vrf
+! create a vrf (for arista this would be: vrf definition <VRF_NAME>)
 ip vrf <VRF_NAME>
 
 ! define a RD (X and Y are 32-bit)
@@ -26,8 +26,8 @@ ping vrf <VRF_NAME> <IP> source <INTF>
 ```  
 
 You must define a **route distinguisher (RD)**   numbers: a special 64-bit prefix prepended to every route in the respective VRF routing table.  
-The common format for an RD is the combination ```ASN:NN```, where ASN is the autonomous system number and NN is the VRF number inside the router  
-Alternatively, you may use the format ```IP-Address:NN```, where IP is the router’s IP address and NN is the VRF name. 
+The common format for an RD is the combination ```ASN:NN```, where ASN is the autonomous system number and NN is the VRF name/number inside the router  
+Alternatively, you may use the format ```IP-Address:NN```, where IP is the router’s IP address and NN is the VRF name/number. 
 
 
 # MPLS
@@ -37,7 +37,7 @@ Multi-Protocol Label Switching, or MPLS tunnels, known as LSPs (Label Switching 
 In MPLS a stack of labels is inserted between the original Layer 2 and the Layer 3 header.  
 Per RFC, every MPLS label starts with a **20-bit value** but the actual **tag is 32 bits** due to special and reserved fields.  
 If a packet carries the stack of MPLS labels, every router performs switching based on the **topmost** label based on the **Label FIB(LFIB)**, which maps incoming labels to their outgoing equivalents (**label lookup**).  
-Flow:
+The flow is:
 * The first router on the edge of an MPLS cloud is known as a LER or **Label Edge Router**
 * The LER is responsible for inserting (pushing) the initial label. 
 * The routers inside the MPLS cloud are known as **LSRs** or **Label Switching Routers** 
@@ -62,9 +62,9 @@ Steps:
   ```
   Note you can also enable it inside a routing protocol process on all interfaces with: ```mpls ldp autoconfig```
   * LDP sends hello to ```224.0.0.2:646```
-* Neigbors learn about the new router; the router id is by dfault the highest loopback but can be set with: ```mpls ldp router-id <interface> force```
+* Neigbors learn about the new router; the router id is by default the **highest loopback** but can be set with: ```mpls ldp router-id <interface> force```
   * If the loopback are not reachable, TCP connection will not be established
-  * You can use the IP of the physical itnerfaces for the connection, with: ```mpls ldp discovery transport-address interface```
+  * You can use the IP of the physical interfaces for the connection, with: ```mpls ldp discovery transport-address interface```
 * The TCP connection is established and possibly authenticated with:
 ```
 ! IP is the neighbor router ID
@@ -72,7 +72,7 @@ mpls ldp neighbor <IP> password <pwd>
 mpls ldp password required
 ```    
 * routers exchange prefixes/labels and populate the LFIB
-  * Note: routers need to have the same prefixes in the routing tables which means be very careful with summarization.
+  * Note: routers need to have the same prefixes in the routing tables which means **be very careful** with **summarization**.
 * Run show commands:
   ```
   ! this output is pretty self explanatory
@@ -262,19 +262,19 @@ OSPF routes redistributed into MP-BGP are:
     The assumption is that all OSPF processes within the same VPN using the same domain-id. 
     * If routes between use different domain-ids, the OSPF process will interpret them as **Type-5 External LSAs**
   * **OSPF route-type**, which has three significant fields: ```source area, route-type, and option```. 
-     Usually depicted as triple X:Y:Z.  
-     Y can be 2(intra-are), 3(inter-area), 5 (external), 7 (NSSA). 
-     Z is the metric type for Y=5/7 or it’s the value 1,2 for E1,E2
+     Usually depicted as triple **X:Y:Z**.  
+     **Y** can be 2(intra-area), 3(inter-area), 5 (external), 7 (NSSA).   
+     **Z** is the metric type for Y=5/7 or it’s the value 1,2 for E1,E2
   * **MED or metric**, copies the original route’s metric from the routing table. Note also that the metric is not incrememented
     by travelling in the MP-BGP cloud (unless the MED is manually modified)
   
-If the areas are not connected in a star manner, you can have routing loops and to reduce the risks OSPF implements some **loop preventions rules**:
+If the areas are not connected in a star manner, you can have routing loops and, in order to reduce the risks **OSPF** implements some **loop preventions rules**:
 * All summary LSAs generated from the routes redistributed from BGP have a special **“Down”** bit set in the LSA headers.  
   *If a router receives a summary-LSA with the down bit set on an interface that belongs to a VRF, it simply drops this LSA*.  
   This is to prevent the case when a summary LSA is flooded across the CE site and delivered back to another PE. 
   * This feature may have to be disabled with the command: ```capability vrf-lite``` if you have CE routers configured with multiple VRFs
   * If ```capability vrf-lite``` is not supported, configure the PE routers with **different domain-IDs**: redistributed routes become **external** and bypass the down-bit check.  
-  Note: this is true only for older router; in new ones, the down bit check is also applied to Type-5 (but they do support the capability command.
+  Note: this is true only for older router; in new ones, the **down** bit check is also applied to Type-5 (but they do support the capability command.
 * Use **route tagging**. All routes redistributed via a particular PE will carry the OSPF route tag with the **BGP AS number**   
   If a PE gets a route tagged with the same it may believe it comes from abother PE in the same site and drop the route. If
   you want to disable this behaviour, just have the PE redistribute into OSP with a different TAG using:
