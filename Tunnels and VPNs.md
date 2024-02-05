@@ -171,7 +171,7 @@ interface Tunnel0
 ```
 
 Note that this tunnel can account for a correct **mtu**; you can see that using ```show interface tunnel0``` that should show **MTU 1446** (for IPSEC in tunnel mode with 54 overhead).  
-Still a good idea however to set use the ```adjust-mss 1406``` with 1406 being the valueyou get by further removing the encapsulated IP + TCP header
+Still a good idea however to set use the ```adjust-mss 1406``` with 1406 being the value you get by further removing the encapsulated IP + TCP header
 
 
 # DMVPN
@@ -501,8 +501,8 @@ ip nhrp redirect    ! -> for phase3
 ------------
 # Some MTU considerations
 
-**GRE** can incapsulate multi protocol, not only IP but it requires
-* 4 extra bytes for the GRE Header (point-point) or 8 extra bytes if the tunnel is point-to-multipoint 
+**GRE** can incapsulate different protocol, not only IP, but it requires:
+* 4 extra bytes for the GRE Header (point-to-point) or 8 extra bytes if the tunnel is point-to-multipoint 
 * 20 Bytes for the Outer IP
 If you only tunnel IP you can use ```tunnel mode ipip``` which only adds 20 bytes
 
@@ -513,7 +513,7 @@ If you only tunnel IP you can use ```tunnel mode ipip``` which only adds 20 byte
 * ESP in tunnel mode adds 20 Bytes for a tunnel IP Header. (Transport mode doesn't).
 
 So overall MAXIMUM ESP(AES) overhead = 10 + 12 + 31 = 53. Obviously the padding cannot be odd, so use 54 as the MAXIMUM overhead.
-The adjust-mss size should consider additional 20 bytes for TCP Header
+The adjust-mss size should consider additional 20 bytes for TCP Header (and possibly another 20 for an inner IP header)
 
 
 
