@@ -37,8 +37,8 @@ ip multicast-routing distributed
 
 Note you can change RPF by adding:
 - static routes: carefull as it actually change the routing path
-- multicast route: ```ip mroute <SOURCE> <MASK> [RPF-IP-Address|<Interface-Name>] [distance]```
-  This commands only change RPF check behaviour.
+- multicast route: ```ip mroute <SOURCE> <MASK> [RPF-IP-Address|<Interface-Name>] [distance]```  
+  This commands only change RPF check behaviour.  
   Note: the mroute table is ordered based on the actul commands, so put the msot specific first
 
 You can debug RPF using:
@@ -151,7 +151,7 @@ The winner is decided based on:
 
 ## PIM SPARSE MODE - ASSERT
 
-If multiple multicast routers share a single segment, only one will send traffic to avoid duplication, i.e.
+If multiple multicast routers share a single segment, only one, also called **Designated Forwarder** (**DF**) will send traffic to avoid duplication, i.e.
 the downstream router would see, accept and forward packets from both.  
 *  A router detects that someone is sending traffic for the same (S,G), that is also locally active (S,G)  
    so it originates a PIM Assert message.  
@@ -170,7 +170,7 @@ the downstream router would see, accept and forward packets from both.
    *  use PIM NBMA mode (sparse mode only)
    *  make sure that the hub always wins the PIM Assert.
 *  if you use an mroute, the AD advertised is 1 (so it basically always wins)
-
+*
 
 
 ## PIM SPARSE MODE - ACCEPT RP
@@ -431,9 +431,10 @@ This mode of operation is useful in situations where most receivers are also sen
 To build the bi-directional tree, PIM elects **designated forwarders (DFs)** on every link in the network: i.e. the router with the shortest metric to reach the RP. **DF routers** are the only routers allowed to forward traffic toward the RP (this is considered the **“upstream”** portion of the BiDir tree).  
 Every router in the multicast domain creates a (\*,G) state for each BiDir group, with the OIL built based on PIM Join messages received from its neighbors. This is the **“downstream”** portion of the BiDir tree.  
 Now:
-* packets received on a valid RPF interface is forwarded based on the OIL. 
-* the DF will also forward a copy of these packets toward the RP 
-  * unless that the packet is received on the interface pointing to the RP.
+* A router creates (*, G) entries only for bidirectional groups. The list of a (*, G) entry includes all the interfaces for which the router has been elected DF and that have received either an IGMP or PIM Join message. 
+* packets received on a valid RPF interface toward the RP is forwarded based on the OIL. 
+* packets received on interfaces not toward the RPF are going to be sent to the RP, if the router is the DF for that segment.
+
 
 Notes:
 *   PIM BiDir does not utilize the source registration procedure, via PIM Register/Register-Stop messages.   
@@ -444,6 +445,8 @@ Notes:
       *  This means that ```ip pim accept-register``` will not work with PIM BiDir, because there are    
          **“register-stop”** messages.
 * Note: an interesting use of PIM Bidr is with VXLAN in case the of a flood and learning configuration; The Spines are usually configured as anycast RP, they synchronize using MSDP.
+* PIM BiDir is not supportedd on GRE interfaces 
+* The IP Address of the RP **does not need to be assigned to a router/device**
 
 Configuration is simple:
 * Enable BiDir PIM on all multicast routers with:  ```ip pim bidir-enable``` 
@@ -451,7 +454,40 @@ Configuration is simple:
   You can do this in the following ways:
   *  Use a static RP configuration with the command ```ip pim rp-address <IP> <ACL> bidir``` .
   *  Use **BSR** or RP information dissemination, you may flag particular group/RP combinations as bi-directional with:  ```ip pim rp-candidate <interface> group-list <ACL> bidir``` 
+     * Note: BSR does not support **phantom RP**, i.e. advertising an RP IP that matches no interfaces.
   * Use **Auto-RP** for RP information dissemination, you may flag particular group/RP combinations as bi-directional using the syntax ```ip pim send-rp-announce <interface> scope <TTL> group-list <ACL> bidir``` .
+
+  Sample config:
+  ```
+  Note: we use in this config auto-rp to announce a phantom RP
+  but we don't show a mapping agent config here.
+
+  [Primary RP]
+  interface Loopback1
+    ip address 192.168.3.1 255.255.255.252                ! Loopback in same subnet as RP IP mask is /30
+    ip pim sparse-mode
+    ip ospf network point-to-point                        ! used so the mask is sent out
+  !
+  ip pim send-rp-announce 192.168.3.2 scope 16 bidir      ! use auto-rp to announce: 192.168.3.2 as the RP
+  !
+  router ospf 1
+    router-id 192.168.2.100                               ! remember fix the router id (we assume this is Lo0 IP)
+  ...
+  
+
+  [Backup RP]
+  interface Loopback1
+    ip address 192.168.3.1 255.255.255.248                ! same IP (could be different) but largert mask: /29
+    ip pim sparse-mode
+    ip ospf network point-to-point
+  !
+  ip pim send-rp-announce 192.168.3.2 scope 16 bidir
+  !
+  router ospf 1
+    router-id 192.168.2.101
+  ...
+  ```
+
 
 
 # SOURCE SPECIFIC MULTICAST (PIM-SSM)
@@ -525,7 +561,11 @@ Anycast RP is a special RP redundancy scenario that allows using redundant RPs s
 * Different DRs will pick up different physical RPs based on the anycast address to register their local sources.
 * To maintain consistent source information, **MSDP** sessions should be configured between the RPs. Note that it can all be in the same AS
 
-Becasue all routers use the same RP, if one fails, after the routing converges, the other one becomes available (no reconfiguration needed)
+Becasue all routers use the same RP, if one fails, after the routing (typically IGP)  converges, the other one becomes available (no reconfiguration needed)
 
-**NOTE:** an interesting use of anycast RP and MSDP is with VXLAN.. in case Multicast is used for flood and learn, you want to configure 
+**NOTEs:** 
+* Because all routers are configured with the same Loopback IP, be sure the **router-id** in the routing protocols is manually set or defined correctly. This is because many routing protocols will get their rotuer-id from a (highest?) loopback so you might end up with differnt routers using the
+same **router-id**
+* an interesting use of anycast RP and MSDP is with VXLAN.. in case Multicast is used for flood and learn, you want to configure 
 multiple RPs and keep them up-to-date
+* The difference with **Phantom RP** is that anycast RP are using actual interface IPs (always the same for all routers) 
