@@ -128,7 +128,7 @@ Notes:
 
 ### Network type NON-BROADCAST
 A DR and BDR are elected, routers go FULL state with DR/BDR
-* this is still a multiple access network but broadcast is not supported (e.g. dmvpn)
+* this is still a multiple access network but broadcast is not supported (e.g. dmvpn if no multicast support is configured)
 * it will still have DR/BDR election because it is mutliple access and DR must be on the hub
    (so priority is set to 0 on the spokes)
 * use the command on the interface to activate
