@@ -93,7 +93,6 @@ The different types of LSA are:
      in this case it is only used when a router starts up and it is not configurable but always equal to the **dead timer**
   *  wait after receiving an LSA on an interface before starting processing it.. this is used in case other updates are expected. The default in this case is zero seconds.
  
-**On demand** circuit can have hello suppressed and LSA set with **do not age** flag
 
 **Timers** are based on the network-type configured on an interface and they need to match to establish a neighbour but you can theoretically set them manually and have 2 different types
 of interfaces (probably not a good idea though.. you also need to be sure that the requirements
@@ -111,7 +110,8 @@ ip ospf dead-interval minimal hello-multiplier 4
 
 Other timers are availble in global OSPF process for: **pacing, retransmission, throttle,etc..**
 
-
+**On demand** this is not a timer but a configuration you can apply to suppressed hellopackets and set set LSAs with the **do not age** flag. This means that the adjacency will remain up even after the layer two of the circuit goes down. It was mainly used on pay-per-packet circuits (e.g. ISDN).  
+It is enabled with the interface command: `ip ospf demand-circuit`
 
 ## Network Types
 
