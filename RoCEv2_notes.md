@@ -9,7 +9,7 @@ Note that inifiniband also takes care of congestion management while in an Ether
 * priority flow control (PFC) congestion avoidance algorithms.
 
 
-<img src="RoCE vs RoCEv2 packet.png" alt="PTP Message exchange" style="height: 200px; width:1000px;"/>
+<img src="pictures/RoCE vs RoCEv2 packet.png" alt="RoCE Packets" style="height: 200px; width:1000px;"/>
 
 Deep learning systems are optimized to handle large amounts of data to process and re-evaluate results. 
 

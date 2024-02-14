@@ -99,5 +99,5 @@ Offset = ((T2 - T1) - (T4 - T3)) / 2
 
 By utilising this offset, the slave clock can adjust its time to ensure it matches the master clock.
 
-<img src="PTP Message exchange.png" alt="PTP Message exchange" style="height: 500px; width:600px;"/>
+<img src="pictures/PTP Message exchange.png" alt="PTP Message exchange" style="height: 500px; width:600px;"/>
 

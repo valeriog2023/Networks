@@ -87,4 +87,4 @@ Note that:
 
 
 # A diagram
-<img src="exchange_setup_diagram.png" alt="PTP Message exchange" style="height: 600px; width:1000px;"/>
+<img src="pictures/exchange_setup_diagram.png" alt="Exchange diagram setup" style="height: 600px; width:1000px;"/>

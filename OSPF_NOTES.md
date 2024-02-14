@@ -246,3 +246,4 @@ It can be done only in **ASBR** routers:
 * Multicast OSPF (type-6) can be ignored    
 * auto-cost reference-bandwidth <X> -> change the reference of cost of an interface
 * interface cost can be set: ip ospf cost <X>
+* You should enable incremental ospf recalculation with the command: **ispf**

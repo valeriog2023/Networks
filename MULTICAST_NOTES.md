@@ -9,7 +9,7 @@ The process has 2 parts:
 
 Multicast ranges are split in sub ranges (see below)
 
-<img src="Multicast_Addresses.png" alt="PTP Message exchange" style="height: 600px; width:800px;"/>
+<img src="pictures/Multicast_Addresses.png" alt="PTP Message exchange" style="height: 600px; width:800px;"/>
 
 Note also that the multicast Ethernet MAC address range starts at ```01:00:5E:00:00:00``` and goes through ```01:00:5E:7F:FF:FF```.  
 Only low-order 23 bits can vary
