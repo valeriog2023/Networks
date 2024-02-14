@@ -133,7 +133,7 @@ A **Route Target (RT) is a BGP extended community attribute**. These BGP attribu
 Example config:
 ```
  ! Note in this example, the RD convention used is <AS>:<VRF_ID> (so the same RD is used in both rotuers)
- ! I do prefer to use <AS>:<router_ID> tbh
+ ! While I do prefer to use <AS>:<router_ID> or <router_id>:<vrf_id> for RD..  this choice for the RT definitely simplify the import/export..
 R1:
 ip vrf VPN_A
   rd 100:1
