@@ -31,7 +31,7 @@ The process is end-to-end and built in the data path:
 **WRED** can be used to set thresholds that indicate congestion and to mark traffic with ECN bits.
 
 WRED can set two thresholds: ```min``` **(Orange)** and ```max``` **(Red)** . On Cisco Nexus 9000 this is done on a per-queue level.  
-The **minimum** threshold indicates minor congestion; based on the **drop probability** in the WRDE configuration, a certain amount of packets is marked with **ECN** while leaving the queue.
+The **minimum** threshold indicates minor congestion; based on the **drop probability** in the WRED configuration, a certain amount of packets is marked with **ECN** while leaving the queue.
 
 If buffer utilization in the queue reaches the WRED **maximum** threshold every packet leaving the queue is marked with **ECN** 
 
