@@ -163,8 +163,8 @@ the downstream router would see, accept and forward packets from both.
 
 **Notes:** 
 *  PIM Assert procedure might be dangerous on NBMA interfaces.  
-   E.g. e a hub-and-spoke DMVPN; if for the Spoke wins, the hub stops sending multicast;
-   The Hub will also not send the traffic to the other spokes as that would violate RPF so
+   E.g. e a hub-and-spoke DMVPN; if for the Spoke wins, the hub stops sending multicast;  
+   Note: the Hub will also not send the traffic to the other spokes as that would violate RPF so
    all other spokes stop receiving traffic.
    Solutions:
    *  use PIM NBMA mode (sparse mode only)
@@ -217,7 +217,7 @@ These routers will send UDP packets to the IP/Port **224.0.1.39/496** with the l
    *  wildcard masks are converted to prefix-lengths, so you cannot use discontinuous masks. 
    *  “deny” statements are interpreted as groups that should be trated as "dense" mode  
 
-The cRP announcements are flooded across the network and reach the Mapping Agents that lsiten for **224.0.0.39**.  
+The cRP announcements are flooded across the network and reach the Mapping Agents that listen for **224.0.1.39**.  
 You configure these routers using the command:
 ```
 ip pim send-rp-discovery <Interface> scope <TTL> interval <Seconds> . 
@@ -431,7 +431,7 @@ This mode of operation is useful in situations where most receivers are also sen
 To build the bi-directional tree, PIM elects **designated forwarders (DFs)** on every link in the network: i.e. the router with the shortest metric to reach the RP. **DF routers** are the only routers allowed to forward traffic toward the RP (this is considered the **“upstream”** portion of the BiDir tree).  
 Every router in the multicast domain creates a (\*,G) state for each BiDir group, with the OIL built based on PIM Join messages received from its neighbors. This is the **“downstream”** portion of the BiDir tree.  
 Now:
-* A router creates (*, G) entries only for bidirectional groups. The list of a (*, G) entry includes all the interfaces for which the router has been elected DF and that have received either an IGMP or PIM Join message. 
+* A router creates (\*, G) entries only for bidirectional groups. The list of a (*, G) entry includes all the interfaces for which the router has been elected DF and that have received either an IGMP or PIM Join message. 
 * packets received on a valid RPF interface toward the RP is forwarded based on the OIL. 
 * packets received on interfaces not toward the RPF are going to be sent to the RP, if the router is the DF for that segment.
 
