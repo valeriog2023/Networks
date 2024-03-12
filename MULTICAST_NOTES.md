@@ -141,12 +141,11 @@ The goal of the DR is:
 *  To register active sources on the segment with the regional RP;
    *  When the DR hears multicast packets on the segment, it will check if the group has an RP
    *  If it does, the data packets are encapsulated into **PIM Register** messages and sent to the RP. 
-   *  The RP will start forwarding them down the shared tree (if there are subscribers) and build the SPT 
-      to the DR
-The winner is decided based on:
+   *  The RP will start forwarding them down the shared tree (if there are subscribers) and build the SPT to the DR
+
+The winner of the DR election (note: the process is preemptive ) is decided based on:
 *  highest priority 
 *  highest IP address;
-*  The process is preemptive 
 
 
 ## PIM SPARSE MODE - ASSERT
@@ -562,6 +561,20 @@ Anycast RP is a special RP redundancy scenario that allows using redundant RPs s
 * To maintain consistent source information, **MSDP** sessions should be configured between the RPs. Note that it can all be in the same AS
 
 Becasue all routers use the same RP, if one fails, after the routing (typically IGP)  converges, the other one becomes available (no reconfiguration needed)
+
+
+# Multicast Load Splitting
+By default, if multiple equal-cost paths are available, PIM sparse mode (PIM-SM), Source Specific Multicast (PIM-SSM), bidirectional PIM (bidir-PIM), and PIM dense mode (PIM-DM) groups follow Reverse Path Forwarding (RPF) and multicast traffic will only go through the PIM neighbor with the highest IP address.
+This means that if a router has 2 neighbours **not on the same subnet** with equal cost to the RP,
+**Join requests** are going to be sent to the neighbour with the highest IP.
+Note that if the neighbours are in the same BMA segment, then a DR is elected (based on priority and highest IP)
+
+However you can enable ECMP multicast load splitting based on:
+1.  **source address**
+1.  **source and group address**
+1.  **source, group, and next-hop address**. 
+
+
 
 **NOTEs:** 
 * Because all routers are configured with the same Loopback IP, be sure the **router-id** in the routing protocols is manually set or defined correctly. This is because many routing protocols will get their rotuer-id from a (highest?) loopback so you might end up with differnt routers using the
