@@ -149,12 +149,12 @@ A DR and BDR are elected, routers go FULL state with DR/BDR
 * neighbors go up to FULL state
 * next hop in LSA3 changes to the ip of the hub router (it was not changed before)
   (all routes learned by the hub?)
-* support cost per niehgbor
+* support cost per neighbor
 
 ### Network type POINT-TO-MULTIPOINT NON BROADCAST
 * No DR/BDR election
 * hello are unicast
-* support cost per niehgbor
+* support cost per neighbor
 
 ## AREA Types
 
@@ -247,3 +247,6 @@ It can be done only in **ASBR** routers:
 * auto-cost reference-bandwidth <X> -> change the reference of cost of an interface
 * interface cost can be set: ip ospf cost <X>
 * You should enable incremental ospf recalculation with the command: **ispf**
+* LSAs have a sequence number as part of loop prventing mechanism
+  the sequence number is recorded when the LSA is first seen.
+  If the router receies the LSA again (same sequence number, it drops it)
