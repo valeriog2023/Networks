@@ -310,3 +310,17 @@ The major points for communities:
       Note: if you set it via a `neigh route-map inbound`, all prefixes received will not be advertised
     - **no-export-subconfed/local-as**: same as no export but for confederation, prefixes are forwarded only to peers in the same confederation as
     
+
+## Route withdraw
+BGP (Border Gateway Protocol) withdraws a prefix in order to ensure that BGP routing information accurately reflects the current state of the network.
+This happens in the following cases:
+
+1. **Prefix Withdrawal**: When a BGP router no longer has a valid route to a specific prefix (destination network), it withdraws the previously advertised route for that prefix. This can happen due to network failures, route changes, or changes in routing policies. When a BGP router withdraws a prefix, it informs its BGP neighbors by sending a BGP UPDATE message with the withdrawn prefix.
+
+2. **Path Attribute Changes**: If there's a change in the path attributes associated with a prefix (such as AS Path, Next Hop, Local Preference, etc.) that makes the previously advertised route invalid or less preferable, BGP may withdraw the prefix and advertise a new route with updated path attributes.
+
+3. **Administrative Configuration**: BGP prefix withdrawal can also occur due to administrative configuration changes. For example, if a network administrator manually removes a prefix advertisement from BGP configuration, the router will withdraw the corresponding prefix from BGP updates sent to its neighbors.
+
+4. **Route Flap Damping**: In some BGP implementations, route flap damping mechanisms may cause BGP to withdraw prefixes. Route flap damping is a technique used to mitigate the impact of route flapping (frequent route changes) by penalizing unstable routes. If a prefix flaps too frequently, BGP may dampen the route by withdrawing it temporarily from BGP updates.
+
+5. **Prefix Aggregation**: BGP routers may withdraw more specific prefixes (subnets) when they start advertising a less specific prefix (aggregate route) that covers them. This process is known as prefix aggregation or route summarization.
