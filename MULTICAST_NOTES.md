@@ -563,22 +563,60 @@ Anycast RP is a special RP redundancy scenario that allows using redundant RPs s
 Becasue all routers use the same RP, if one fails, after the routing (typically IGP)  converges, the other one becomes available (no reconfiguration needed)
 
 
-# Multicast Load Splitting
-By default, if multiple equal-cost paths are available, PIM sparse mode (PIM-SM), Source Specific Multicast (PIM-SSM), bidirectional PIM (bidir-PIM), and PIM dense mode (PIM-DM) groups follow Reverse Path Forwarding (RPF) and multicast traffic will only go through the PIM neighbor with the highest IP address.
-This means that if a router has 2 neighbours **not on the same subnet** with equal cost to the RP,
-**Join requests** are going to be sent to the neighbour with the highest IP.
-Note that if the neighbours are in the same BMA segment, then a DR is elected (based on priority and highest IP)
-
-However you can enable ECMP multicast load splitting based on:
-1.  **source address**
-1.  **source and group address**
-1.  **source, group, and next-hop address**. 
-
-
-
 **NOTEs:** 
 * Because all routers are configured with the same Loopback IP, be sure the **router-id** in the routing protocols is manually set or defined correctly. This is because many routing protocols will get their rotuer-id from a (highest?) loopback so you might end up with differnt routers using the
 same **router-id**
 * an interesting use of anycast RP and MSDP is with VXLAN.. in case Multicast is used for flood and learn, you want to configure 
 multiple RPs and keep them up-to-date
 * The difference with **Phantom RP** is that anycast RP are using actual interface IPs (always the same for all routers) 
+
+
+
+# Multicast Load Splitting
+
+
+See here: https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/ipmulti_optim/configuration/xe-16/imc-optim-xe-16-book/imc-load-splt-ecmp.html
+
+By default, if multiple equal-cost paths are available, PIM sparse mode (PIM-SM), Source Specific Multicast (PIM-SSM), bidirectional PIM (bidir-PIM), and PIM dense mode (PIM-DM) groups follow Reverse Path Forwarding (RPF) and multicast traffic will only go through the PIM neighbor with the highest IP address.
+This means that if a router has 2 neighbours **not on the same subnet** with equal cost to the RP,
+**Join requests** are going to be sent to the neighbour with the highest IP.
+Note that this is consistent with DR and Assert Mechanisms: 
+- if the neighbours are in the same BMA segment, then a DR is elected (based on priority and highest IP) and it will take care of new join
+- if the neighbours are in the same BMA segment and they both start sending multicast traffic on the
+  segment, the Assert mechanism will decide who will stop and who will continue to forward traffic
+  based on AD:metric and highest IP as tie breaker 
+
+However you can enable ECMP multicast load splitting based on:
+1.  **source address**
+1.  **source and group address**
+1.  **source, group, and next-hop address**. 
+
+Using the Source-Hash and Basic Source-Group-Hash Algorithms can cause: 
+- **Predictability**.  
+   When the same number of equal-cost paths are present in multiple places/devices in a topology, e.g. N. All the devices will split the folows across those N paths in the same way in all places.
+   This can be used for consisteny and engineer traffic
+- **Polarization**.  
+   As a By-Product of the the same split a problem called polarization can arise and that can prevent routers in some topologies from effectively utilizing all available paths for load splitting.
+   E.g.   
+   If we assume a Receievr (R) subscribes to S1,..,S10 from the same subnet and the Router R1 close to R has 2 upliks toward the S subnet, it will split the flows in 2, e,g, 1-5 from R2 and 6-10 from R3.
+   Now, even if R2 and R3 also have multiple links toward the S subnet they will only use just one
+   because they will use the same split as R1 but they are only involved with flows (1-5) or (6-10). 
+ 
+Using the next hop as well will remove the polarization problem but it will not be possible to engineer traffic flows.
+Multicast load splitting can be enabled with:
+```
+! Note: the way this is enabled should be consistent on all routers!
+!
+! source hash
+ip multicast multipath
+!
+! source and group hash
+ip multicast multipath s-g-hash basic
+!
+! source, group and next-hop based
+ip multicast multipath s-g-hash next-hop-based
+```
+
+Notes:
+- Load splitting can be nullified by the **Assert** mechanism if the 2 routers are on the same segment
+- BGP will require ```maximum-path <X>``` to be set or it won't install ECMP routes
