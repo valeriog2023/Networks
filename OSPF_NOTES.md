@@ -247,6 +247,12 @@ It can be done only in **ASBR** routers:
 * auto-cost reference-bandwidth <X> -> change the reference of cost of an interface
 * interface cost can be set: ip ospf cost <X>
 * You should enable incremental ospf recalculation with the command: **ispf**
-* LSAs have a sequence number as part of loop prventing mechanism
-  the sequence number is recorded when the LSA is first seen.
-  If the router receies the LSA again (same sequence number, it drops it)
+* LSAs have a sequence number as part of advertising/loop preventing mechanism
+  The sequence number is recorded when the LSA is first seen or when it is updated.
+  If the router receives an LSA with the same sequence number, it ignores it.
+  If the router receives an LSA with an updated sequence number, it:
+  * updates the entry, reset aging and TTL timer etc..
+  * send a LSAck back
+  * flood the LSA to the other links 
+* if a link goes down, the LSA for the link (in the same area) stays in the OSPF DB until it ages out but the link going down triggers a SPT recalculation.
+  * if the link goes down in area 1, the recalculation only affects the local area but if the prefix is advertised with a summary LSA in area0, the ABR can withdraw/invalidate it by sending out an LSA with MaxAge set  
