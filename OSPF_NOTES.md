@@ -93,7 +93,6 @@ The different types of LSA are:
      in this case it is only used when a router starts up and it is not configurable but always equal to the **dead timer**
   *  wait after receiving an LSA on an interface before starting processing it.. this is used in case other updates are expected. The default in this case is zero seconds.
  
-**On demand** circuit can have hello suppressed and LSA set with **do not age** flag
 
 **Timers** are based on the network-type configured on an interface and they need to match to establish a neighbour but you can theoretically set them manually and have 2 different types
 of interfaces (probably not a good idea though.. you also need to be sure that the requirements
@@ -111,7 +110,8 @@ ip ospf dead-interval minimal hello-multiplier 4
 
 Other timers are availble in global OSPF process for: **pacing, retransmission, throttle,etc..**
 
-
+**On demand** this is not a timer but a configuration you can apply to suppressed hellopackets and set set LSAs with the **do not age** flag. This means that the adjacency will remain up even after the layer two of the circuit goes down. It was mainly used on pay-per-packet circuits (e.g. ISDN).  
+It is enabled with the interface command: `ip ospf demand-circuit`
 
 ## Network Types
 
@@ -128,7 +128,7 @@ Notes:
 
 ### Network type NON-BROADCAST
 A DR and BDR are elected, routers go FULL state with DR/BDR
-* this is still a multiple access network but broadcast is not supported (e.g. dmvpn)
+* this is still a multiple access network but broadcast is not supported (e.g. dmvpn if no multicast support is configured)
 * it will still have DR/BDR election because it is mutliple access and DR must be on the hub
    (so priority is set to 0 on the spokes)
 * use the command on the interface to activate
@@ -149,12 +149,12 @@ A DR and BDR are elected, routers go FULL state with DR/BDR
 * neighbors go up to FULL state
 * next hop in LSA3 changes to the ip of the hub router (it was not changed before)
   (all routes learned by the hub?)
-* support cost per niehgbor
+* support cost per neighbor
 
 ### Network type POINT-TO-MULTIPOINT NON BROADCAST
 * No DR/BDR election
 * hello are unicast
-* support cost per niehgbor
+* support cost per neighbor
 
 ## AREA Types
 
@@ -246,3 +246,13 @@ It can be done only in **ASBR** routers:
 * Multicast OSPF (type-6) can be ignored    
 * auto-cost reference-bandwidth <X> -> change the reference of cost of an interface
 * interface cost can be set: ip ospf cost <X>
+* You should enable incremental ospf recalculation with the command: **ispf**
+* LSAs have a sequence number as part of advertising/loop preventing mechanism
+  The sequence number is recorded when the LSA is first seen or when it is updated.
+  If the router receives an LSA with the same sequence number, it ignores it.
+  If the router receives an LSA with an updated sequence number, it:
+  * updates the entry, reset aging and TTL timer etc..
+  * send a LSAck back
+  * flood the LSA to the other links 
+* if a link goes down, the LSA for the link (in the same area) stays in the OSPF DB until it ages out but the link going down triggers a SPT recalculation.
+  * if the link goes down in area 1, the recalculation only affects the local area but if the prefix is advertised with a summary LSA in area0, the ABR can withdraw/invalidate it by sending out an LSA with MaxAge set  

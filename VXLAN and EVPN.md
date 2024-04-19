@@ -14,7 +14,7 @@ Virtual Extensible LAN (VXLAN) is a IP/UDP encapsulation technology that enables
   * the original Ethernet Frame
 
 ## VXLAN Bridge and L2VNI
-<img src="vxlan_bridging.png" alt="VXLAN bridgingg from Arista Deployment Guide" style="height: 600px; width:1000px;"/>
+<img src="pictures/vxlan_bridging.png" alt="VXLAN bridgingg from Arista Deployment Guide" style="height: 600px; width:1000px;"/>
 
 **L2VNI** are used for VXLAN bridging (e.x. traffic from Host A to Host B in the same VLAN):
 
@@ -112,7 +112,7 @@ This NLRI includes fields like (it includes more.. but these are the more meanin
   1. **IP-VRF to IP-VRF model**, which is similar to inter-subnet forwarding for host routes as part of symmetric VXLAN. 
   Only Type-5 routes and IP prefixes are advertised, allowing announcement of IP prefixes into a tenant’s EVPN domain 
    
- <img src="route_type5.png" alt="Route-type5 Use Case" style="height: 600px; width:1000px;"/>  
+ <img src="pictures/route_type5.png" alt="Route-type5 Use Case" style="height: 600px; width:1000px;"/>  
 
  In the picture we can see how the route-type5 is used for external connectivity:
  *  Subnet-A is learned on VTEP-1. 
@@ -468,7 +468,7 @@ Bet​ween PODs, EVPN peeri​ng does not nece​ss​ari​ly need to coi​nc�
 
 **IBGP POSSIBLE SETUP**
 
-<img src="Multi-Pod_VXLAN_IBGP.png" alt="Mutli POD VXLAN as SINGLE AS" style="height: 500px; width:800px;"/>
+<img src="pictures/Multi-Pod_VXLAN_IBGP.png" alt="Mutli POD VXLAN as SINGLE AS" style="height: 500px; width:800px;"/>
 
 The Figu​re does not ind​ic​ate any physi​c​al topolo​gy for conn​ecti​ng mult​ip​le PODs tog​ether rather, it dep​icts the peeri​ng topolo​gy.. however I think that in the diagram in the picture, either the SPINEs RR are peering directly or, if they peer with the super spines, the Super Spines will also have to be RR
 IBGP will:
@@ -483,7 +483,7 @@ A sing​le BGP AS across all PODs so that the multi-POD Fabr​ic runs EVPN MP-
 
 **EBGP POSSIBLE SETUP**
 
-<img src="Multi-Pod_VXLAN_EBGP.png" alt="Mutli POD VXLAN as Multiple AS" style="height: 500px; width:800px;"/>
+<img src="pictures/Multi-Pod_VXLAN_EBGP.png" alt="Mutli POD VXLAN as Multiple AS" style="height: 500px; width:800px;"/>
 
 With this des​ign, BGP peeri​ng among mult​ip​le PODs is simp​le. EVPN routes can be dis-​ tribu​ted among PODs through MP-eBGP peeri​ng witho​ut the need for add​it​ional con-​ figu​r​at​ion.  
 Add​it​ional cons​ide​ra​t​ions need to be given to how to pres​erve the att​ribu​tes in an EVPN route when it is dist​ribu​ted within the Fabr​ic as eBGP def​ault beh​avi​or may cause some of the att​ribu​tes to be overwritten:

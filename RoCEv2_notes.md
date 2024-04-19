@@ -9,7 +9,7 @@ Note that inifiniband also takes care of congestion management while in an Ether
 * priority flow control (PFC) congestion avoidance algorithms.
 
 
-<img src="RoCE vs RoCEv2 packet.png" alt="PTP Message exchange" style="height: 200px; width:1000px;"/>
+<img src="pictures/RoCE vs RoCEv2 packet.png" alt="RoCE Packets" style="height: 200px; width:1000px;"/>
 
 Deep learning systems are optimized to handle large amounts of data to process and re-evaluate results. 
 
@@ -31,7 +31,7 @@ The process is end-to-end and built in the data path:
 **WRED** can be used to set thresholds that indicate congestion and to mark traffic with ECN bits.
 
 WRED can set two thresholds: ```min``` **(Orange)** and ```max``` **(Red)** . On Cisco Nexus 9000 this is done on a per-queue level.  
-The **minimum** threshold indicates minor congestion; based on the **drop probability** in the WRDE configuration, a certain amount of packets is marked with **ECN** while leaving the queue.
+The **minimum** threshold indicates minor congestion; based on the **drop probability** in the WRED configuration, a certain amount of packets is marked with **ECN** while leaving the queue.
 
 If buffer utilization in the queue reaches the WRED **maximum** threshold every packet leaving the queue is marked with **ECN** 
 

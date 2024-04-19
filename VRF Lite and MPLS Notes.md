@@ -133,7 +133,7 @@ A **Route Target (RT) is a BGP extended community attribute**. These BGP attribu
 Example config:
 ```
  ! Note in this example, the RD convention used is <AS>:<VRF_ID> (so the same RD is used in both rotuers)
- ! I do prefer to use <AS>:<router_ID> tbh
+ ! While I do prefer to use <AS>:<router_ID> or <router_id>:<vrf_id> for RD..  this choice for the RT definitely simplify the import/export..
 R1:
 ip vrf VPN_A
   rd 100:1
@@ -366,5 +366,46 @@ ip nat inside source list VPN_PREFIXES interface GigabitEthernet<X> vrf VPN_A ov
 show ip route
 show ip nat translation [verbose]
 show ip route bgp !in the peers to check they get the default
+
+```
+
+# Any Transport over MPLS (AToM) (pseudowires)
+
+**AToM** is a technology that allows the transport of Layer 2 packets over an MPLS (Multiprotocol Label Switching) backbone.  
+Note that this is not really used in large scale and enterprises because it is super-seeded by EVPN and vxlan capabilities. It can however be usefult in smaller scale deployments.s
+
+It works as follows:
+1. Layer 2 Packet Encapsulation:  
+   The Layer 2 frame is (this can be Ethernet/Frame Relay/PPP/HDLC/ATM) is encapsulated into an MPLS packets.
+1. The MPLS packets are then routed through the MPLS backbone.  
+   Label Switching: The MPLS backbone uses labels to switch packets and each **AToM** packet is assigned an **MPLS label**, which determines its path through the network.
+1. Label Distribution.  
+   The provider edge (PE) routers exchange label information using protocols like LDP (Label Distribution Protocol).
+   1. A loopback interface is configured on each PE router for originating and terminating Layer 2 traffic. (Labels will point to this Loopback)
+1. A **circuit identifier** (this is basically justa number) is used at the endpoints to uniquely identify the pseudowire interfaces
+
+Configuration Prerequisites:
+1. Configure IP routing in the core so that PE routers can reach each other via IP.
+1. Set up MPLS in the core to establish label-switched paths (LSPs) between PE routers.
+1. Create a loopback interface for originating and terminating Layer 2 traffic.
+1. Enable MPLS on the different interfaces, redistribute the loopback to provide reachability
+
+```
+[PE Router]
+! Assume loopback0 is used for the AtoM tunnel
+!
+! Create a pseudowire class:
+R1(config)# pseudowire-class my-atom
+R1(config-pw-class)# encapsulation mpls
+R1(config-pw-class)# protocol l2tpv3
+R1(config-pw-class)# ip local interface Loopback0
+R1(config-pw-class)# exit
+!
+! On the interface toward the CE
+R1(config)# interface <intf> 
+R1(config-if)# xconnect <remote_loopback> <circuit_id> encapsulation mpls
+R1(config-if-xconn)# pw-class my-atom
+
+! Similar configuration is created on the remote termintation point
 
 ```

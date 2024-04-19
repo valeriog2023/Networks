@@ -48,11 +48,11 @@ Notes:
   * EBGP TTL is set to 255 but only 254 is accepted (default) /  `ebgp-multihop <hops>` if TTL >1 is requried, it will accept `TTL` up to `255-<hops>`  
     `disable-connected-check` also allows for loopbacks to be used (but not further than that, i.e. no routers in between)
   * Use TTL security to set the TTL to `<hop>` counts instead: `neighbor <IP> ttl-security hops <X>`   
-* next-hop self: for IBGP, changes the next-hop (remember next-hop does not usually change in IBGP 
+* **next-hop-self**: for IBGP, changes the next-hop (remember next-hop does not usually change in IBGP 
     or confederation (fake) EBGP);  
     The value set for next-hop is the one used for the TCP connection with the neighbor.
    * The next-hop can also be set (selectvely) via a route map applied to a neighbor (option set ip next-hop <IP>)       
-* next-hop-unchanged: this is basically the oppositeof next-hop-self. It will keep the next-hop as it has been received.
+* **next-hop-unchanged**: this is basically the oppositeof next-hop-self. It will keep the next-hop as it has been received.
   (Used mainly in evpn setup..see related notes)   
 * neighbors can be configured in **BGP peer groups** (optimizes resources, updates are computed per peer group and not per neighbor)    
 * you can do conditional advertising with the syntax:  
@@ -110,8 +110,11 @@ Notes:
     Attributes are not updated by a RR but 2 are added as loop prevention:
       * Originitor ID: IBGP router originating the route (not the RR)
       * Cluster List: List of IBGP clusters (note: a cluster is a RR and its client).   
-          * **clusters** are a way to optimize RR/clients distribution, e.g. keeping RR and its clients geographically local
-          * RR in different clusters are **peers** but they are not each other clients
+          * **clusters** are a way to optimize RR/clients distribution, e.g. keeping RR and its clients geographically local.  
+          The cluster id can be set with the command `bgp cluster-id <id>` otherwise it's the Router ID. If a prefix is received with the local cluster ID it's **dropped**.
+          * you can have multiple **RR** in the same cluster but in that case you have to specify the same **cluster id** explicitely
+          * RR in different clusters are **peers** but they are **not** each other clients
+          * If in a cluster all RR clients are meshed with each other (unlikely) you can disable client-to-client reflection with the command: `no bgp client-to-client reflection`
   * **CONFEDERATIONS** are a way to split a big AS domain into small sub-domains.
     * `router bgp <AS>` refers to the confederation AS (usually private AS range (64512 – 65535))
     * confedration id refers to the actual main AS
@@ -152,9 +155,10 @@ Notes:
 
    **SELECTION PREFERENCE ORDER**:
    - **Highest wieght** (Cisco) -  device local only
-       - set via route-map
+       - set via route-map or on the neighbor
    - **Highest Local preference** - AS local
       - used to determine the way traffic leaves the AS 
+      - this attrribute is forarded inside the same AS
    - **Locally originated** prefixes (via network, aggreagte-address, redistribute)
    - **shortest AS PATH**
       - used to influence incoming traffic
@@ -170,8 +174,8 @@ Notes:
       - MED is used only if the prefixes come from the same AS (but can be configrued to always compare med)
       - Hot potato routing (do not care about med, just get the packet out of the AS)
       - Cold potato routing (route the packet inside the AS until it gets closer to the destination: lowest MED)
-      - if missing you can set is as the highet value: bgp bestpath med missing-as-worst
-      - can be non deterministic, use: bgp bestpath deterministic-med 
+      - if missing you can set is as the highet value: `bgp bestpath med missing-as-worst`
+      - can be non deterministic, use: `bgp bestpath deterministic-med` 
    - **EBGP** routes over **IBGP** routes
    - **Lowest IGP metric** to next hop
    - **Lowest BGP router id**
@@ -181,7 +185,7 @@ Notes:
   However, to selectively generate a default route, use the command: 
     `neighbor <IP> default-originate [route-map <CONDITION>] `.  
   Without the `route-map` parameter, this command will generate a default route and send it to the configured peer. 
-  It is not required to have a matching default route in the BGP table or the RIB   
+  It is **not** required to have a matching default route in the BGP table or the RIB   
 
 ## FILTERING
 Filtering order INBOUND in:  
@@ -306,3 +310,17 @@ The major points for communities:
       Note: if you set it via a `neigh route-map inbound`, all prefixes received will not be advertised
     - **no-export-subconfed/local-as**: same as no export but for confederation, prefixes are forwarded only to peers in the same confederation as
     
+
+## Route withdraw
+BGP (Border Gateway Protocol) withdraws a prefix in order to ensure that BGP routing information accurately reflects the current state of the network.
+This happens in the following cases:
+
+1. **Prefix Withdrawal**: When a BGP router no longer has a valid route to a specific prefix (destination network), it withdraws the previously advertised route for that prefix. This can happen due to network failures, route changes, or changes in routing policies. When a BGP router withdraws a prefix, it informs its BGP neighbors by sending a BGP UPDATE message with the withdrawn prefix.
+
+2. **Path Attribute Changes**: If there's a change in the path attributes associated with a prefix (such as AS Path, Next Hop, Local Preference, etc.) that makes the previously advertised route invalid or less preferable, BGP may withdraw the prefix and advertise a new route with updated path attributes.
+
+3. **Administrative Configuration**: BGP prefix withdrawal can also occur due to administrative configuration changes. For example, if a network administrator manually removes a prefix advertisement from BGP configuration, the router will withdraw the corresponding prefix from BGP updates sent to its neighbors.
+
+4. **Route Flap Damping**: In some BGP implementations, route flap damping mechanisms may cause BGP to withdraw prefixes. Route flap damping is a technique used to mitigate the impact of route flapping (frequent route changes) by penalizing unstable routes. If a prefix flaps too frequently, BGP may dampen the route by withdrawing it temporarily from BGP updates.
+
+5. **Prefix Aggregation**: BGP routers may withdraw more specific prefixes (subnets) when they start advertising a less specific prefix (aggregate route) that covers them. This process is known as prefix aggregation or route summarization.

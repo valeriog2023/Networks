@@ -74,10 +74,16 @@ which is used not for time keeping but to give a precise measure of when a perio
 *  the delay from the master to slave
 *  the delay from the slave to master.
 
+PTP messages are sent to multicast addresses (also use different Ether Type):
+* 224.0.0.107 (non forwardable as it's in the local range)
+* 224.0.1.129 (forwardable but not standard)
+
 To calculate the delay from the master to slave:
 *  T1 is the initial timestamp, and is the exact time the **sync** message is sent by the master. Since T1 is an accurate recording of when the sync message was transmitted via the Ethernet port, it is sent in the **follow-up** message.
 
-*  T2 is the second timestamp, and is the exact time the slave receives the sync message.
+*  T2 is the second timestamp, and is the exact time the slave receives the sync message.  
+Note: some masters can present an accurate timestamp of the packet leaving inside T1 and if that's the case, no T2 is required
+
 
 Once both T1 and T2 are available at the slave, the delay value between the master and the slave can be determined through the calculation **T2 – T1**.
 
@@ -99,5 +105,5 @@ Offset = ((T2 - T1) - (T4 - T3)) / 2
 
 By utilising this offset, the slave clock can adjust its time to ensure it matches the master clock.
 
-<img src="PTP Message exchange.png" alt="PTP Message exchange" style="height: 500px; width:600px;"/>
+<img src="pictures/PTP Message exchange.png" alt="PTP Message exchange" style="height: 500px; width:600px;"/>
 
