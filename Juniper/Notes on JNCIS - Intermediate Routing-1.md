@@ -293,3 +293,38 @@ R1# top show compare
 +  }
 
 ```
+
+
+## Filter Based Forwarding
+This is basically the same as policy based routing but you can match on a lot of different conditions (e.g protocol, source/destination ports, source addresses, etc..).  
+In the following configuration we assume:
+-  we have 2 ISPs: **ISP-A** and **ISP-B**.  
+-  IP: 8.8.8.8/32 is reachable via both ISPs and we want to:
+   - reach it via ISP-A if we come from the internal subnet: 172.25.0.0/24
+   - reach it via ISP-B if we come from the internal subnet: 172.25.1.0/24
+- traffic from both subnets is received by the router in intergace ge-0/0/0   
+
+
+In order to configure the forwarding, we need to:
+- Define Forwarding Routing instances:
+  ```
+  set routing-instances ISP-A instance-type forwarding routing-options static route 0.0.0.0/0 next-hop <ISP-A Next Hop>
+  set routing-instances ISP-A instance-type forwarding routing-options static route 0.0.0.0/0 next-hop <ISP-B Next Hop>
+  ```
+- Create a Firewall filter
+  ```
+  edit firewall family inet
+  set filter SUBNETS term SUBNET-1 from source-address 172.25.0.0/24
+  set filter SUBNETS term SUBNET-1 then routing-instance ISP-A
+  set filter SUBNETS term SUBNET-2 from source-address 172.25.1.0/24
+  set filter SUBNETS term SUBNET-1 then routing-instance ISP-B
+  
+  ```
+- Apply the filter to the interface where traffic is **incoming**  (ge-0/0/0.0)
+  ```
+  set interface ge-0/0/0 unit 0 family inet filter input SUBNETS
+  ```
+
+Note: 
+- the routing table will not show these filter based forwarding (same as policy routing)
+- of course the returning traffic might come both ways..
