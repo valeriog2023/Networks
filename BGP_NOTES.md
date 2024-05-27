@@ -324,3 +324,52 @@ This happens in the following cases:
 4. **Route Flap Damping**: In some BGP implementations, route flap damping mechanisms may cause BGP to withdraw prefixes. Route flap damping is a technique used to mitigate the impact of route flapping (frequent route changes) by penalizing unstable routes. If a prefix flaps too frequently, BGP may dampen the route by withdrawing it temporarily from BGP updates.
 
 5. **Prefix Aggregation**: BGP routers may withdraw more specific prefixes (subnets) when they start advertising a less specific prefix (aggregate route) that covers them. This process is known as prefix aggregation or route summarization.
+
+
+## BGP Additional Paths
+By default BGP advertises the best path knwon to a destination; **if a better path is discovered, the previous NLRI will be withdrawn**.  
+These has a few disadvantages:
+- Next-Hop failure means BGP has to reconverge before traffic can be forwarded again
+- Possible sub-optimal routing.  
+  This happens especially when you have route-reflectors: they will pick the best route for them and advertise that but not for the RR clients 
+  there might be better/different options
+- Can't use **BGP Multipath**
+- Possible MED Oscillation
+
+It is however possible to configure BGP to advertise Additional Paths so that peers will see all path options. This is done by adding a **Path Identifier**: `<path id>` to the NLRI (similar in a way to the RD), however this only works for **IBGP Peers** .  
+The steps to configure Additional Paths are:
+ 1.  Enable the additional path feature globally on the routers
+ 1.  Configure a global selection criterion to chose the extra paths:
+     - Best N: this is the Best Path and the N-1 other  Best Paths using BGP selection process.
+     - Group-Best: this will select the best path for each AS and group them together; e.g. if you receive the same route from 3 AS with different paths
+       you will get the a group made by the best route from each AS.
+     - All: all paths that have a unique next-hop can be used as an additional path
+ 1.  Configure the specific neighbours/peer groups so that you send them the additional paths; note that the neighbour statement should 
+     match the global policy for consistency..
+
+```
+R1(config)# router bgp 100
+R1(config-router)# address-family ipv4
+R1(config-router-af)# bgp additional-paths send receive
+R1(config-router-af)# bgp additional-paths select group-best all/<N>
+R1(config-router-af)# ! 
+R1(config-router-af)# ! alternatives
+R1(config-router-af)# ! bgp additional-paths select best <N>
+R1(config-router-af)# ! bgp additional-paths select best all
+R1(config-router-af)#
+R1(config-router-af)# neighbor 192.168.2.2 advertise additional-paths group-best all  <- this should match or be a smaller set than the global command
+R1(config-router-af)# ! neighbor 192.168.2.2 advertise additional-paths disable       <- if you want to disable it in an address family
+
+
+``` 
+Yu can also optionally use a **route map** to filter the additional paths advertised by matching on the tags; these tags are the **advertise-sets** configured with the command: `bgp additional-paths select`.  
+The route map will match the paths tags against the ones in the command:  `match additional-paths advertise-set` 
+
+Of course in the route map, you can also set one or more actions, e.g.: `set metric`
+
+```
+route-map additional_path1 permit 10
+  match additional-paths advertise-set best 3   ! -> assuming this is the advertise tag, i.e. the selected criteria
+  set metric 500
+```
+
