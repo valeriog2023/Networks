@@ -28,7 +28,10 @@ Notes:
   Default values are 60 and 180 seconds
 * BGP NEXT HOP TRIGGER: ```bgp nexthop trigger delay <seconds>```   
   it reacts to changes to IGP next-hop values, e.g. metric changes or next-hop becoming unreachable
-
+* Well-Known Mandatory Attributes:
+   - Origin
+   - As-path
+   - next-hop
 
 
 
