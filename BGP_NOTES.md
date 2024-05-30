@@ -32,14 +32,20 @@ Notes:
    - Origin
    - As-path
    - next-hop
-
+* BGP supports 4 types of messages:
+   - Open: Establish BGP peering session
+   - Keepalive: Handshake at regular interval
+   - Notification: e.g. shutting down a peering session
+   - Update: Announce new routes (prefix + attribute values) or withdraw previously announced router
+     In the update, BGP exchanged NLRI which are sets of routes bundeld together with BGP attributes.
 
 
 ## NEIGHBORS
-* TCP port 179; src IP is the interface
+* **TCP port 179**; src IP is the interface
    * update-source can be used to change the src interface: `neighbor <X> update-source <intf>`
 * States are: 
-   * **Idle**: up and good but no routes exchanged (starting)
+   * **Idle**: up and good but no routes exchanged (starting); you can also go back and forth from active to idle,  
+               or if there are problems at any point (e.g. no keepalive received)
    * **Connect**: actively trying to connect
    * **Active**: if the connection times out (the router will actively retry to conenct)
    * **OpenSent**: Open message sent but no response or keep alive received yet
