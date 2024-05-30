@@ -215,29 +215,49 @@ In the SP deployment for **q-in-q** devices have a naming conventions that basic
       the S-Tag
    - On the receiving side, the destination PE will receive the frame from the **S-vlan bridge** on its network port with the S-tag; they will  
      remove the S-tag and forward the frame to the Customer port with the initial C-Tag 
+  - the PE should filter the Vlans received from the customer.. this is done on the PE network interface toward the Core network with the command: `inner-vlan-id-list <range>`;  
+    Note: this requires some extra commands to be applied to the physical interface:
+      - `flexible-vlan-tagging` 
+      - `encapsulation flexible-ethernet-services`
+      - Customer vlan on the unit network interface
+      - bridge domain for the customer
 
 ```
-[Customer - CE]
 ! This is just configured to be a trunk port toward the PR
 ! We asusme they send vlan 10 tagged but any vlan would work
+[CE (Customer)]
+--- nothing special here
 
-[SP - PE]
+
+!
 ! Traffic will:
 !  - come from customer CE on interface ge-0/0/0.0
 !  - go to S-Vlan bridge out of interface ge-0/0/1.0
+[PE (SP)]
 set bridge-domain Cust1 vlan-id 100
 !
+! Customer Port
 set interfaces ge-0/0/0.0 family bridge interface-mode access  
 set interfaces ge-0/0/0.0 family bridge vlan-id 100
 !
-set interfaces ge-0/0/0.0 family bridge interface-mode trunk
-set interfaces ge-0/0/0.0 family bridge vlan-id 100
+! Network Port
+set interfaces ge-0/0/1.0 family bridge interface-mode trunk
+set interfaces ge-0/0/1.0 family bridge vlan-id 100
+set interfaces ge-0/0/1.0 family bridge inner-vlan-id-list 10-19
+! 
+set interfaces ge-0/0/1 flexible-vlan-tagging
+set interfaces ge-0/0/1 encapsulation flexible-ethernet-services
+set interfaces ge-0/0/1.0 vlan-id 100
+!
+! Bridge domain (required for vlan filtering to work)
+set bridge-domains Cust1Range vlan-id-list 10-19
+
 
 
 [SP - S-vlan bridge]
 ! Notes:
 !  - Traffic will come from PE1 on interface ge-0/0/0 and leave to PE-2 from interface ge-0/0/1
-!  - The S-Vlan bridge needs to have q-in-q encapsulation enabled with flexible-vlan-tagginf
+!  - The S-Vlan bridge needs to have q-in-q encapsulation enabled with flexible-vlan-tagging
 !
 set bridge-domain Cust1 vlan-id 100
 !
@@ -253,4 +273,74 @@ set interfaces ge-0/0/0.0 family bridge vlan-id 100
 set interfaces ge-0/0/1.0 family bridge interface-mode trunk
 set interfaces ge-0/0/1.0 family bridge vlan-id 100
 
+```
+
+## Q-in-Q Vlan Normalization
+The SP might decide to remove the tag from the frame received by the customer and use its own **C-TAG**; this is callsed **VLAN Tag Normalization**. While this setup  
+does not change the configuration on **S-Vlan bridge** (Core), it does require a different configuration on the PE device, both on the Customer and on the Network ports:
+- the customer interface will use sub-interfaces (configured under the bridge-id).
+- the bridge-id will be configured with vlan-id none, so that every tag received from one of the sub interfaces is going to be removed.
+- the network interface will be set
+   - as a sub interface using the Provider Customer vlan
+   - to use specific outer (S-tag) and inner tag (C-tag)
+
+Note that in this setup, we map 3 Customer Vlans to a single C-tag; while this works.. their traffic gets all mixed together..  
+Basically these vlans are kinda bridged together.. **so probably not great!**  
+At the destination, C-tag is removed and the packet is forwarded based on the destination mac address through the matching sub interface
+(or if the destination is un-known, it goes everywhere)
+```
+!
+! Bridge domain: when it is set to none, it will "pop" whatever tag is received on the port (traffic from customer)
+set bridge-domains Cust1Range vlan-id none
+set bridge-domains Cust1Range interface ge-0/0/0.10
+set bridge-domains Cust1Range interface ge-0/0/0.11
+set bridge-domains Cust1Range interface ge-0/0/0.12
+set bridge-domains Cust1Range interfaces ge-0/0/1.100
+
+
+!
+! Customer Port
+set interfaces ge-0/0/0 flexible-vlan-tagging
+set interfaces ge-0/0/0 encapsulation flexible-ethernet-services
+set interfaces ge-0/0/0.10 encapsulation vlan-bridge vlan-id 10
+set interfaces ge-0/0/0.11 encapsulation vlan-bridge vlan-id 11
+set interfaces ge-0/0/0.11 encapsulation vlan-bridge vlan-id 12
+
+!
+! Network Port
+set interfaces ge-0/0/1 flexible-vlan-tagging
+set interfaces ge-0/0/1 encapsulation flexible-ethernet-services
+set interfaces ge-0/0/1.100 encapsulation vlan-bridge vlan-tags outer 100 inner 10
+
+! 
+
+```
+
+## Q-in-Q Vlan Rewrite
+This usually happens at the border of different Administrative domains (read different Service Provider) if the **S-TAG** used is different
+and needs to be changed to forward traffic further.  
+The translation is done using `vlan-rewrite` under the family bridge, on the interface that connects to the different domain, i.e. where we receive the different trunk.
+
+```
+[SP using S-TAG: 999]
+!
+! Bridge domain: when it is set to none, it will "pop" whatever tag is received on the port (traffic from customer)
+set bridge-domain Cust1 vlan-id 900
+set bridge-domains Cust1Range interfaces ge-0/0/0.999
+!
+! Network Port
+set interfaces ge-0/0/1 flexible-vlan-tagging
+set interfaces ge-0/0/1 encapsulation flexible-ethernet-services
+set interfaces ge-0/0/1.999 encapsulation vlan-bridge vlan-tags outer 999 inner 10
+
+
+[S-Vlan SP CORE DEVICE]
+set bridge-domain Cust1 vlan-id 100
+!
+!
+set interfaces ge-0/0/0 flexible-vlan-tagging
+set interfaces ge-0/0/0 encapsulation flexible-ethernet-services
+set interfaces ge-0/0/0.0 family bridge interface-mode trunk
+set interfaces ge-0/0/0.0 family bridge vlan-id-list 100
+set interfaces ge-0/0/0.0 family bridge vlan-rewrite translate 999 100  <-- we receive an S-TAG of 999 and translate it 100
 ```
