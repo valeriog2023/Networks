@@ -344,3 +344,209 @@ set interfaces ge-0/0/0.0 family bridge interface-mode trunk
 set interfaces ge-0/0/0.0 family bridge vlan-id-list 100
 set interfaces ge-0/0/0.0 family bridge vlan-rewrite translate 999 100  <-- we receive an S-TAG of 999 and translate it 100
 ```
+
+
+# LAG and MC-LAG
+Juniper high end devices can bundle up to 64 links together, either via LACP or statically (LAG).  
+MLAG are the same as Cisco VPCs or Arista MLAG; devices need to have:
+ - **Inter Chassis Link** configured a **trunk** ports over which  they run the **ICCP** protocol
+ - configure IRB
+ - trunk the management vlan over the ICC links
+ 
+ Note that you need to enable this feature in the chassis configuration stanza and you also need to statically setup
+ how many LAG interfaces (read port-channels/vpc) you want to create  
+ using the **device-count** option; once they have been create they will show up as interfaces: **ae-\<X>** .  
+ This part is common for both LAG and MC-LAG so it's shown here:
+
+ ```
+ !
+ ! Creates 2 aggregataed interfaces: ae0 and ae1
+ !
+ set chassis aggregated-devices ethernet device-count 2
+
+ !
+ !
+ ! Set the max number of interfaces we can bundle to 8
+ !
+ set chassis aggregated-devices ethernet maximum-link 8
+ ```
+
+ ## LAG Setup
+ The following configuration snippet will show static and LACP bundle (one side only)  
+ Notes: 
+  - this might not work on **virtual** instances with newer software (it should work with old version 14.X).
+  - in some devices `gigether-options` is shown as just `ether-options`
+
+```
+! Assuming ae0 has been created on the device (see snippet above) this will bundle g-0/0/0 and ge-0/0/1
+set interfaces ge-0/0/0 gigether-options 802.3ad ae0
+set interfaces ge-0/0/1 gigether-options 802.3ad ae0
+
+
+!
+! To enable lacp you can set it as either active or passive
+set interfaces ae0 aggregated-ether-options lacp active
+! Optional commands:
+! set interfaces ae0 aggregated-ether-options lacp accept-data     keep receiving traffic even when LACP goes down
+! set interfaces ae0 aggregated-ether-options lacp fast-failover   to turn off LACP fast-failover
+! set interfaces ae0 aggregated-ether-options lacp system-id
+! set interfaces ae0 aggregated-ether-options lacp system-priority
+! set interfaces ae0 aggregated-ether-options lacp periodic        timer for periodic transmission of LACP packets
+
+
+!
+! Now you can actually configure the interface as a normal interface:
+set interfaces ae0.0 family bridge interface-mode trunk vlan-id-list [1 10 20]
+
+
+===================== show commands
+
+# run show lacp interfaes
+
+# run show lacp statistics interfaces ge-0/0/0
+```
+
+
+## MC-LAG Setup
+This requires to setup a management domain between the 2 devices (or more?) involved. Basically the devices in the MC domain
+need to be able to exchange management traffic.  
+In order to accomplish this we need to setup:
+ - IP address on Loopback 0
+ - management vlan and related IRB
+ - routing protocol enabled (OSPF)
+
+Once that is done, ICCP can be setup to exchange informations between the peers; ICCP leverages the routing protocol so you can:
+- have the devices not directly connected
+- have more than one device as peer
+
+---
+The next snippet of code will show the management domain setup assuming we use vlan 5 as management and interface ge-0/0/9 for inter-chassis links. 
+Note that :
+- if you had multiple links you would bundle them in a single LACP link.
+- we setup an active/standby MC-LAG first
+
+**Note:** Inter chassis link is a trunk and **must** have all the customer vlans too (to be confirmed.. as it did not work with data vlans when active/standby mc-lag is used)
+          
+ ```
+ [R1]
+ set interfaces lo0.0 family inet address 1.1.1.1/32
+
+ set interfaces irb.5 family inet address 100.100.5.1/24
+ set bridge-domains mgmt vlan-id 5
+ set bridge-domains mgmt routing-interface irb.5
+
+ set protocols ospf area 0 interface lo0.0 passive
+ set protocols ospf area 0 interface irb.5
+
+ set interfaces ge-0/0/9.0 family bridge interface-mode trunk vlan-id-list  [ 5 ]
+ 
+ !
+ ! ICCP SETUP
+ set switch-options service-id 1                                                         ! ---> this needs to match the other side
+ set protocols iccp local-ip-addr 1.1.1.1
+ set protocols iccp peer 2.2.2.2 redundancy-group-id-list 1                              ! ---> group-id-list needs to match the other side
+ set protocols iccp peer 2.2.2.2 liveness-detection minimum interval 200 multiplier 4    ! ---> this enables BFP which is requried
+
+
+
+! MC-LAG TO CLIENT
+! Assuming ae1 has been created on the device (see initial snippet) this will bundle g-0/0/2 from both R1 and R2
+!
+set interfaces ge-0/0/2 gigether-options 802.3ad ae1
+!
+set interfaces ae1 aggregated-ether-options lacp active
+set interfaces ae1 aggregated-ether-options lacp periodic fast
+set interfaces ae1 aggregated-ether-options lacp system-id aa:bb:cc:dd:ee:ff           ! ---> these need to match on both sides
+set interfaces ae1 aggregated-ether-options lacp admin-key 1                           ! ---> these need to match on both sides
+!
+set interfaces ae1 aggregated-ether-options mc-ae-id 1                                 ! ---> these need to match on both sides
+set interfaces ae1 aggregated-ether-options mc-ae mode active-standby                  ! ---> these need to match on both sides
+set interfaces ae1 aggregated-ether-options mc-ae redundancy-group 1                   ! ---> these need to match on both sides
+set interfaces ae1 aggregated-ether-options mc-ae chaissis-id 0                        ! ---> the other side needs to be different!
+set interfaces ae1 aggregated-ether-options mc-ae status-control active                ! ---> the other side needs to be passive!
+
+!
+! ACTUAL INTERFACE CONFIGURATION
+! Now you can actually configure the interface as a normal interface:
+set interfaces ae1.0 family bridge interface-mode trunk vlan-id-list [1 10 20]
+
+
+
+---------------------------------
+
+[R2]
+ set interfaces lo0.0 family inet address 2.2.2.2/32
+
+ set interfaces irb.5 family inet address 100.100.5.2/24
+ set bridge-domains mgmt vlan-id 5
+ set bridge-domains mgmt routing-interface irb.5
+
+ set protocols ospf area 0 interface lo0.0 passive
+ set protocols ospf area 0 interface irb.5
+ 
+ set interfaces ge-0/0/9.0 family bridge interface-mode trunk vlan-id-list  [ 5 ]
+ 
+ 
+ !
+ ! ICCP SETUP
+ set switch-options service-id 1                                                         ! ---> this needs to match the other side
+ set protocols iccp local-ip-addr 2.2.2.2
+ set protocols iccp peer 1.1.1.1 redundancy-group-id-list 1                              ! ---> group-id-list needs to match the other side
+ set protocols iccp peer 1.1.1.1 liveness-detection minimum interval 200 multiplier 4    ! ---> this enables BFP which is requried
+
+
+
+! MC-LAG TO CLIENT
+! Assuming ae1 has been created on the device (see initial snippet) this will bundle g-0/0/2 from both R1 and R2
+!
+set interfaces ge-0/0/2 gigether-options 802.3ad ae1
+!
+set interfaces ae1 aggregated-ether-options lacp active
+set interfaces ae1 aggregated-ether-options lacp periodic fast
+set interfaces ae1 aggregated-ether-options lacp system-id aa:bb:cc:dd:ee:ff           ! ---> these need to match on both sides
+set interfaces ae1 aggregated-ether-options lacp admin-key 1                           ! ---> these need to match on both sides
+!
+set interfaces ae1 aggregated-ether-options mc-ae-id 1                                 ! ---> these need to match on both sides
+set interfaces ae1 aggregated-ether-options mc-ae mode active-standby                  ! ---> these need to match on both sides
+set interfaces ae1 aggregated-ether-options mc-ae redundancy-group 1                   ! ---> these need to match on both sides
+set interfaces ae1 aggregated-ether-options mc-ae chaissis-id 1                        ! ---> the other side needs to be different!
+set interfaces ae1 aggregated-ether-options mc-ae status-control passive               ! ---> the other side needs to be active!
+
+!
+! ACTUAL INTERFACE CONFIGURATION
+! Now you can actually configure the interface as a normal interface:
+set interfaces ae1.0 family bridge interface-mode trunk vlan-id-list [1 10 20]
+
+
+
+
+
+
+========================================== show commands
+
+ # run show bfd sessions
+
+ # run show iccp
+
+ # run show bridge mac-table
+
+ # run show lacp interfaces
+
+ # run show interfaces mc-ae
+ 
+ ```
+
+
+## Active/Active MC-LAG
+
+```
+[R1]
+set interfaces ae1 multi-chassis-protection 2.2.2.2 ge-0/0/9
+set interfaces ae1 aggregated-ether-options mc-ae mode active-active
+set interfaces ae1 aggregated-ether-options mc-ae status-control active              ! --> this stay active
+
+[R2]
+set interfaces ae1 multi-chassis-protection 1.1.1.1 ge-0/0/9
+set interfaces ae1 aggregated-ether-options mc-ae mode active-active
+set interfaces ae1 aggregated-ether-options mc-ae status-control passive             ! --> this stay passive
+```
