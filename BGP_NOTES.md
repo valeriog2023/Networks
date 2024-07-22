@@ -382,3 +382,8 @@ route-map additional_path1 permit 10
   set metric 500
 ```
 
+**Note:** the problem with additional paths is slightly different when the prefix is locally generated; e.g. if you have multiple equal costs paths to the same prefix and use:  
+ `network <subnet> mask <mask>`   
+ to advertise the prefix (or redistribution), only one path is going to be pushed to the bgp table and in particular, the one with the lowest **next-hop IP** (as the path are equal cost they will have the same attributes except for that).
+
+ The command: `bgp sourced-paths per-net static all` seems also to be an option but it was not available in my virtual lab (15.5(2))
