@@ -626,3 +626,51 @@ Notes:
   You might want to use this to **save the config**
 - while the example use the `--update-path`, `--update-file` the process would be the same with replace.. you would just need to use `--replace-path`, `--replace-file`
 - we used files to replace values as we had multiple values to replace.. you could however just use the flag `--update-value`, `--replace-value`
+
+
+
+
+### GNMI SUBSCRIBE OPERATIONS
+Subscribe requests allow to get updates from the device either periodically or when we have a state change. The updates are small because we are using grpc and it's really good to stream data efficiently.  
+These updates are then supposedly sent to a broker message (e.g. kafka) and then to some time series database like influxdb or Prometheus
+
+When creating subscriptions there's a lot of different subscriptions options..  The most important sets the way you get updates with `--stream-mode`:  
+- **ON_CHANGE**: Updates are only sent when the value of the entry item changes. 
+- **SAMPLE**: Data is sent at periodic interfaces as specified in the sample interfval field --sample-intervale
+- **TARGET_DEFINED**: if the path specified refers to leaves that are event-driven, then an **on_change** subscription may be created (e.g. interface up/down admin-state);   
+  if the data represents coutners value a **sample** subscription is used (e.g. interface counters)
+
+Once the stream mode is set, you can also set a **heartbeat** with `--heatbeat-interval`; if this is set there must always be one update for every heartbeat, even if the stream mode is **on_change** or **sample** with `--suppress-redundant` and no changes have occurred
+```
+ gnmic -a 192.168.122.3:6030 --gzip -u admin -p admin --insecure subscribe  \
+       --path "/interfaces/interface[name=Ethernet3]/state/counters"        \
+       --sample-mode sample                                                 \       
+       --sample-interval 60s                                                \
+       --format flat
+
+interfaces/interface[name=Ethernet3]/state/counters/in-broadcast-pkts: 0
+interfaces/interface[name=Ethernet3]/state/counters/in-discards: 0
+interfaces/interface[name=Ethernet3]/state/counters/in-errors: 0
+interfaces/interface[name=Ethernet3]/state/counters/in-fcs-errors: 0
+interfaces/interface[name=Ethernet3]/state/counters/in-multicast-pkts: 0
+interfaces/interface[name=Ethernet3]/state/counters/in-octets: 0
+interfaces/interface[name=Ethernet3]/state/counters/in-pkts: 0
+interfaces/interface[name=Ethernet3]/state/counters/in-unicast-pkts: 0
+interfaces/interface[name=Ethernet3]/state/counters/out-broadcast-pkts: 0
+interfaces/interface[name=Ethernet3]/state/counters/out-discards: 0
+interfaces/interface[name=Ethernet3]/state/counters/out-errors: 0
+interfaces/interface[name=Ethernet3]/state/counters/out-unicast-pkts: 0
+
+interfaces/interface[name=Ethernet3]/state/counters/carrier-transitions: 2
+---> this is an update
+interfaces/interface[name=Ethernet3]/state/counters/out-multicast-pkts: 10622
+interfaces/interface[name=Ethernet3]/state/counters/out-octets: 1335741
+interfaces/interface[name=Ethernet3]/state/counters/out-pkts: 10622
+---> this is an update
+interfaces/interface[name=Ethernet3]/state/counters/out-multicast-pkts: 10623
+interfaces/interface[name=Ethernet3]/state/counters/out-octets: 1335864
+interfaces/interface[name=Ethernet3]/state/counters/out-pkts: 10623
+
+
+```
+As before, you can subscribe to multiple paths at the same time
