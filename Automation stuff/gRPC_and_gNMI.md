@@ -190,7 +190,84 @@ gnmic>
 
 <img src="../pictures/gnmic_get_path.png" alt="GNMIC Get PATH" style="height: 400px; width:1600px;"/>
 
+Note that **GNMIC** can use yaml file instead of passing options via the command line; by default gnmic will look for a file called `.gnmic.yml` (file extension can also be yaml/json);   
+if you want to specify a different file path you can just use the option `--config <file>`     
+Note that environment variables can also be used, for instance some examples are here:
+- GNMIC_ADDRESS: matches the option --address <ip:port>
+- GNMIC_PASSWORD: matches the option --password <pwd>
+- GNMIC_USERNAME: matches the option --username <user>
 
+An example of a gnmic config file is below:
+```
+[gnmic config file]
+---
+username: admin
+password: sros
+port: 57400
+timeout: 5s
+skip-verify: true
+tls-key: /path/to/client.key
+tls-cert: /path/to/client.crt
+tls-ca: /path/to/ca.crt
+
+targets:
+  172.17.0.100:
+    timeout: 2s
+    subscriptions:
+      - sub1
+    outputs:
+      - output1
+      - output3
+  172.17.0.101:
+    username: sros
+    password: sros
+    insecure: true
+    subscriptions:
+      - sub2
+    outputs:
+      - output2
+      - output3
+  172.17.0.102:57000:
+    password: sros123
+    tls-key: /path/file1
+    tls-cert: /path/file2
+
+    
+subscriptions:
+  sub1:
+    paths:
+      - /configure/port[port-id=*]
+      - /state/port[port-id=*]
+    stream-mode: on_change # target-defined # sample
+  sub2:
+    paths:
+       - /configure/port[port-id=*]/statistics
+    stream-mode: sample
+    sample-interval: 10s
+
+outputs:
+  output1:
+    type: file
+    file-type: stdout
+  output2:
+    type: file
+    filename: local.log
+  output3:
+    type: nats
+    address: localhost:4222
+    subject-prefix: telemetry
+    username:
+    password:
+  [...]
+```
+#### GNMIC OPTIONS
+Other gnmic options that can be useful (they can be applied to all type of requests.. not necessarily get requests):
+- --log: this display the log messages from the request
+- --debug: verbose debug messages; useful if you want to have a look at what the source code does.. note that this level of tracing will show  
+  username and password
+- --print-request: this will print the **paths,encoding and data-type (for filter)** of the request..      
+- --format: changes the format of the response back and supports: `flat, proto, protojson, prototext, json, event`  
+  in particular flat will show the full **Xpath** plus the value
 
 ### YANG MODELS
 Are generally available in either the openconfig repo github or on vendor's specific repos, e.g. https://github.com/aristanetworks/yang  
@@ -198,9 +275,68 @@ If you want to use GNMIC with Bendor specific (Arista in this case) models, you'
 ```
 gnmic --file EOS-<version>/openconfig/public/release/models \     <--- this path points to a file in the arista repo (locally cloned)
       --dir  ../public/third_party/ietf                     \     <--- this path points to the openconfig public repo (locally cloned)
-      --exclude iet-interfaces                              \
+      --exclude ietf-interfaces                             \
       prompt
 
+
+# if you want to get the (very long) list of paths you can do instead
+gnmic --file EOS-<version>/openconfig/public/release/models \
+      --dir  ../public/third_party/ietf                     \ 
+      --exclude ietf-interfaces                             \
+      path
+
+```
+
+You might also want to generate a json/yaml representation of a model to see what parameters/values you need to provide if you want to configure
+a specific path  
+You can do that with the keyword: **generate** when you specify a `--path`:  
+Note that you will see both fields that are **rw** and **ro** and not always the distinction is clear..
+```
+gnmic --file ./ --exclude ietf-interfaces --path <path> generate 
+
+gnmic --file ./ --encoding json_ietf --exclude ietf-interfaces --path interfaces/interface[name=Ethernet3]/state generate 
+admin-status: ""
+counters:
+  carrier-transitions: ""
+  in-broadcast-pkts: ""
+  in-discards: ""
+  in-errors: ""
+  in-fcs-errors: ""
+[...]
+cpu: ""
+description: ""
+enabled: "true"
+forwarding-viable: "true"
+hardware-port: ""
+hashing-policy: ""
+id: ""
+ifindex: ""
+in-rate: ""
+last-change: ""
+logical: ""
+loopback-mode: ""
+management: ""
+mtu: ""
+name: ""
+oper-status: ""
+out-rate: ""
+physical-channel: []
+tpid: oc-vlan-types:TPID_0X8100
+transceiver: ""
+type: ""
+
+
+gnmic --file ./ --encoding json_ietf --exclude ietf-interfaces --path interfaces/interface[name=Ethernet3]/config generate 
+description: ""
+enabled: "true"
+forwarding-viable: "true"
+hashing-policy: ""
+id: ""
+loopback-mode: ""
+mtu: ""
+name: ""
+tpid: oc-vlan-types:TPID_0X8100
+type: ""
 ```
 
 ### GNMI SETUP EXAMPLE ON ARISTA
@@ -213,5 +349,129 @@ config-mgmt-api-gnmi)# provider eos-native                   <- required to acce
 config-mgmt-api-gnmi)# wr
 #
 # show management api gnmi
+
+Octa: enabled
+
+Transport: default
+Enabled: yes
+Server: running on port 6030, in default VRF
+SSL profile: none
+QoS DSCP: none
+Authorization required: no
+Accounting requests: no
+Notification timestamp: last change time
+Listen addresses: ::
+Authentication username priority: x509-spiffe, metadata, x509-common-name
+```
+
+
+# GNMI OPERATIONS WITH GNMIC
+
+### GNMIC CAPABILITIES
+This gives you: 
+- a list of supported encodings 
+- a list of supported models (so you can check what path are in those modules)
+- the GNMI Version
+You can query for capabilities with gnmic:
+```
+gnmic -a <host>:<port=6030>  -u <user> -p <pwd> --insecure capabilities
+
+$ gnmic -a 192.168.122.3:6030 -u admin -p admin --insecure capabilities | more
+gNMI version: 0.7.0
+supported models:
+  - openconfig-ospf-policy, OpenConfig working group, 0.1.3
+  - arista-exp-eos-mlag, Arista Networks <http://arista.com/>, 
+  - openconfig-sampling, OpenConfig working group, 0.1.0
+  - openconfig-isis-flex-algo, Arista Networks <http://arista.com/>, 0.6.1
+  - ietf-netconf-monitoring, IETF NETCONF (Network Configuration) Working Group, 
+  - arista-routing-policy-notsupported-deviations, Arista Networks, Inc., 
+  - openconfig-ospf-types, OpenConfig working group, 0.1.3
+  - arista-exp-eos-l2protocolforwarding, Arista Networks, Inc., 
+  - arista-l1-open-config-optical-channel-model-aug, Arista Networks <http://arista.com/>, 1.0.0
+  - arista-network-instance-notsupported-deviations, Arista Networks, Inc., 
+[...]
+supported encodings:
+  - JSON
+  - JSON_IETF
+  - ASCII
+
+
+```
+
+
+### GNMIC GET
+You can run a single get request but also multiple get requests from different multiple paths: just use multiple `--path <path>` options;  
+In both cases the result is returned inside a list under the keyword **updates**.  
+In the same way, you can point to different target by using `-a <address>` multiple times in your request; the results are always included in a list
+and presented as dictionaries.    
+Requests can also be filtered by type with the options: **ALL, CONFIG, STATE, OPERATIONAL** and the default being **ALL**; the filter is applied
+with the `--type <OPTION>` command;  
+Finally you can also specify the option `--values-only` which will return, instead of a dictionary with key: value, just a lists of values..so   
+I guess it could be useful if you are very specific in your query..  
+Notes: 
+- Some **gnmic** options are actually for NOKIA devices only..
+- Below I did not use double quotes in the path but it's good practice to use them
+- Again be aware that even if a model is supported, it does not mean that every path will be implemented by the device..
+```
+[single path request]
+gnmic --address <host>:<port=6030>  \
+      -u <user> -p <pwd> --insecure \
+      get --path "<path>"
+      
+# gnmic -a 192.168.122.3:6030 -u admin -p admin --insecure get --path interfaces/interface[name=Ethernet3]/state/counters | more
+[
+  {
+    "source": "192.168.122.3:6030",
+    "timestamp": 1721726470248628184,
+    "time": "2024-07-23T10:21:10.248628184+01:00",
+    "updates": [
+      {
+        "Path": "interfaces/interface[name=Ethernet3]/state/counters",
+        "values": {
+          "interfaces/interface/state/counters": {
+            "openconfig-interfaces:carrier-transitions": "2",
+            "openconfig-interfaces:in-broadcast-pkts": "0",
+            "openconfig-interfaces:in-discards": "0",
+            "openconfig-interfaces:in-errors": "0",
+[...]           
+
+
+[multiple path request]
+gnmic --address <host>:<port=6030>      \
+      -u <user> -p <pwd> --insecure get \
+      --path "<path1>"                  \  
+      --path "<path2>"      
+
+gnmic -a 192.168.122.3:6030 -u admin -p admin --insecure get                    \
+   --path interfaces/interface[name=Ethernet3]/state/counters/in-broadcast-pkts \
+   --path interfaces/interface[name=Ethernet3]/state/counters/out-errors
+[
+  {
+    "source": "192.168.122.3:6030",
+    "timestamp": 1721726805252385617,
+    "time": "2024-07-23T10:26:45.252385617+01:00",
+    "updates": [
+      {
+        "Path": "interfaces/interface[name=Ethernet3]/state/counters/in-broadcast-pkts",
+        "values": {
+          "interfaces/interface/state/counters/in-broadcast-pkts": 0
+        }
+      }
+    ]
+  },
+  {
+    "source": "192.168.122.3:6030",
+    "timestamp": 1721726805252385617,
+    "time": "2024-07-23T10:26:45.252385617+01:00",
+    "updates": [
+      {
+        "Path": "interfaces/interface[name=Ethernet3]/state/counters/out-errors",
+        "values": {
+          "interfaces/interface/state/counters/out-errors": 0
+        }
+      }
+    ]
+  }
+]      
 ```
 
