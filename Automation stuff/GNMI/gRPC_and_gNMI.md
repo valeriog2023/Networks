@@ -642,12 +642,14 @@ When creating subscriptions there's a lot of different subscriptions options..  
 
 Once the stream mode is set, you can also set a **heartbeat** with `--heatbeat-interval`; if this is set there must always be one update for every heartbeat, even if the stream mode is **on_change** or **sample** with `--suppress-redundant` and no changes have occurred
 ```
- gnmic -a 192.168.122.3:6030 --gzip -u admin -p admin --insecure subscribe  \
+[SAMPLE SUBSCRIPTION]
+ gnmic -a 192.168.122.3:6030 --gzip -u admin -p admin --insecure subscribe  \   -> they keyword subscribe can be replaced with they keyword: sub
        --path "/interfaces/interface[name=Ethernet3]/state/counters"        \
        --sample-mode sample                                                 \       
        --sample-interval 60s                                                \
        --format flat
 
+interfaces/interface[name=Ethernet3]/state/counters/carrier-transitions: 2
 interfaces/interface[name=Ethernet3]/state/counters/in-broadcast-pkts: 0
 interfaces/interface[name=Ethernet3]/state/counters/in-discards: 0
 interfaces/interface[name=Ethernet3]/state/counters/in-errors: 0
@@ -660,16 +662,55 @@ interfaces/interface[name=Ethernet3]/state/counters/out-broadcast-pkts: 0
 interfaces/interface[name=Ethernet3]/state/counters/out-discards: 0
 interfaces/interface[name=Ethernet3]/state/counters/out-errors: 0
 interfaces/interface[name=Ethernet3]/state/counters/out-unicast-pkts: 0
+interfaces/interface[name=Ethernet3]/state/counters/out-multicast-pkts: 11146
+interfaces/interface[name=Ethernet3]/state/counters/out-octets: 1401655
+interfaces/interface[name=Ethernet3]/state/counters/out-pkts: 11146
 
+---> this is an update (full update every time after 60s, note that the order of the paths can be different)
+interfaces/interface[name=Ethernet3]/state/counters/out-multicast-pkts: 11178
+interfaces/interface[name=Ethernet3]/state/counters/out-octets: 1405677
+interfaces/interface[name=Ethernet3]/state/counters/out-pkts: 11178
+interfaces/interface[name=Ethernet3]/state/counters/in-broadcast-pkts: 0
+interfaces/interface[name=Ethernet3]/state/counters/in-discards: 0
+interfaces/interface[name=Ethernet3]/state/counters/in-errors: 0
+interfaces/interface[name=Ethernet3]/state/counters/in-fcs-errors: 0
+interfaces/interface[name=Ethernet3]/state/counters/in-multicast-pkts: 0
+interfaces/interface[name=Ethernet3]/state/counters/in-octets: 0
+interfaces/interface[name=Ethernet3]/state/counters/in-pkts: 0
+interfaces/interface[name=Ethernet3]/state/counters/in-unicast-pkts: 0
+interfaces/interface[name=Ethernet3]/state/counters/out-broadcast-pkts: 0
+interfaces/interface[name=Ethernet3]/state/counters/out-discards: 0
+interfaces/interface[name=Ethernet3]/state/counters/out-errors: 0
+interfaces/interface[name=Ethernet3]/state/counters/out-unicast-pkts: 0
 interfaces/interface[name=Ethernet3]/state/counters/carrier-transitions: 2
----> this is an update
-interfaces/interface[name=Ethernet3]/state/counters/out-multicast-pkts: 10622
-interfaces/interface[name=Ethernet3]/state/counters/out-octets: 1335741
-interfaces/interface[name=Ethernet3]/state/counters/out-pkts: 10622
----> this is an update
-interfaces/interface[name=Ethernet3]/state/counters/out-multicast-pkts: 10623
-interfaces/interface[name=Ethernet3]/state/counters/out-octets: 1335864
-interfaces/interface[name=Ethernet3]/state/counters/out-pkts: 10623
+
+
+
+[ON CHANGE SUBSCRIPTION]
+gnmic -a 192.168.122.3:6030 --gzip -u admin -p admin --insecure subscribe  \
+       --path "/interfaces/interface[name=Ethernet3]/state/description"    \
+       --sample-mode on_change                                             
+{
+  "source": "192.168.122.3:6030",
+  "subscription-name": "default-1721747862",
+  "timestamp": 1721747892684055704,
+  "time": "2024-07-23T16:18:12.684055704+01:00",
+  "updates": [
+    {
+      "Path": "interfaces/interface[name=Ethernet3]/state/description",
+      "values": {
+        "interfaces/interface/state/description": "New Description"
+      }
+    }
+  ]
+}
+
+[ON CHANGE SUBSCRIPTION - FLAT VERSION]
+gnmic -a 192.168.122.3:6030 --gzip -u admin -p admin --insecure subscribe  --path "/interfaces/interface[name=Ethernet3]/state/description" --format flat
+
+interfaces/interface[name=Ethernet3]/state/description: to External World
+
+
 
 
 ```
