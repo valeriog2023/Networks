@@ -317,16 +317,21 @@ You can provide additional input information to the questions that act different
 
 To know exactly what additional information is supported by each question you need to refer to the documentation of the specific question  https://pybatfish.readthedocs.io/en/latest/questions.html  
 
-Because under the hoods we have a Pandas dataframework, you can also use directly Pandas methods, just get the dataframework `df = bf.q.bgpProcessConfiguration(nodes='/R/').answer().frame()`  
+Because under the hoods we have a **Pandas** dataframework, you can also use directly Pandas methods, just get the dataframework:
+
+`df = bf.q.bgpProcessConfiguration(nodes='/R/').answer().frame()`  
+
 and:
 - convert the result to csv `df.to_csv()`
 - convert the result to html `df.to_html()`
 - convert the result to dictionary `df.to_dict(orient="records")`
 - get a specific row with `df.iloc[<row_number>]` so that you will see the single row as a record (all fields visible)
 - check if the result is empty with `df.empty`
-- Run a specific query on columns, for instance, only show rows rows where the column router ID has a specific value:
+- Run a specific **query** on columns, for instance, only show rows rows where the column router ID has a specific value:
   ```
   df.query("Router_ID == '2.2.2.2'")
   0   r2  default   2.2.2.2             None                  None          False          False           EXACT_PATH  ['5.5.5.5']           False  ARRIVAL_ORDER
   ```
+  Note that the **query** method supports different operators: `==, in, >, <` etc... basically everything that returns a boolean and can run on a value for a specific column
+  (and also on multiple columns)
 
