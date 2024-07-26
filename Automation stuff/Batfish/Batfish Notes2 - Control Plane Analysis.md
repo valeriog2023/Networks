@@ -248,6 +248,19 @@ here you can see some examples
    3   r4  default  6.6.6.0/24  ['BEST']  ip 192.168.46.134  192.168.46.134  ...          0.0.0.0             None         None                              None  32768  None
    4   r4  default  9.9.9.9/32  ['BEST']    ip 192.168.49.9    192.168.49.9  ...     192.168.49.9             None         None                           None      0  None
    ```
+
+Finally note that you can manually add:
+- border interfaces toward devices that are not managed (so you don't have the configuration)
+- BGP connections/peers with External Peers (of which you don't have the configuration)
+
+You can do that by adding a gile called **isp_config.json** under the **batfish** folder in the snapshot, see documentation:
+
+https://pybatfish.readthedocs.io/en/latest/formats.html#modeling-isps
+
+And note that you can also add specific external BGP announcements in a similar way with a file called: **external_bgp_announcements.json**
+placed inside the top-level snapshot folder (see https://pybatfish.readthedocs.io/en/latest/formats.html#external-bgp-announcements )
+
+
 ---
 
 

@@ -25,6 +25,11 @@ https://batfish.readthedocs.io/en/latest/supported_devices.html
 
 and limitations, for instance it **does not support: MPLS, IPv6** and has some other limitations for L2 operations (e.g. it does not support VPC) 
 
+
+Many example and other things can also be found in Batfish official repo here:
+
+https://github.com/batfish/batfish/tree/master
+
 ## BATFISH SETUP
 
 Batfish can run in the form of a docker container.. so you'll need to have docker installed and runnig. Once you are ready you can launch it as follows:
@@ -85,13 +90,15 @@ Type "help", "copyright", "credits" or "license" for more information.
 Finally we can prepare the data and data structure inside the batfish-data folder on the main host:
 ```
 +--batfish-data
-   +--output
    +--snapshots
       +--site1           # <--- we use this as name of the snapshot
       |  +--configs      # <--- a folder called config is required
       |     +--R1.cfg    # <--- these are the sw hostnames
       |     +--R2.cfg
       |     +--R3.cfg
+      |  +--batfish      # <--- a folder called batfish can be added for optional extra info
+      |     +--isp_config.json
+      |     +--layer1_topology.json 
    +--main.py
 
 Notes: for network devices you can put the show running output while for cumulus linux you will need
