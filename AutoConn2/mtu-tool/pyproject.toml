@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "mtu-tool"
+version = "0.1.0"
+description = ""
+authors = ["valeriog <valerio.galantini@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+rich = "^13.9.4"
+nornir = "^3.4.1"
+nornir-napalm = "^0.5.0"
+typer = "^0.13.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
