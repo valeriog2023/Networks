@@ -137,7 +137,6 @@ you also get enhanced resource return values onc the command has run
 
 the gather_facts will also get the facts in the same format that the resource module will need
 
-
 ```
 ---
 - name: Publish SoT to Github repository
